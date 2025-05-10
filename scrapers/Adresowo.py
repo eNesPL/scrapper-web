@@ -126,8 +126,13 @@ class AdresowoScraper(BaseScraper):
                     price_span = row_div.find('span', class_='offer-summary__value')
                     if price_span:
                         price_text_content = price_span.get_text(strip=True)
+                        # Look at previous siblings for currency (zł)
+                        currency_text = ''.join(row_div.find(string='Cena').parent.find_next_siblings(string=True))
                         if any(char.isdigit() for char in price_text_content):
                             price = price_text_content.replace('\xa0', ' ').strip()
+                            # Check if we need to append currency from siblings
+                            if 'zł' in currency_text and 'zł' not in price:
+                                price += ' zł'
 
                 # Try to extract Area (m2)
                 if 'Powierzchnia' in div_full_text:
@@ -214,17 +219,24 @@ class AdresowoScraper(BaseScraper):
             og_title = soup.find('meta', property='og:title')
             details['title'] = og_title['content'].strip().replace(" | Adresowo.pl", "") if og_title and og_title.get('content') else 'N/A'
         
-        # Price
+        # Price - check offer-summary first which is used on listing pages
         price_text_content = 'N/A' # Default
-
-        # Attempt 1: Primary selector (aside[role="complementary"] p.price, div.priceBox p.price)
-        price_container = soup.select_one('aside[role="complementary"] p.price, div.priceBox p.price')
-        if price_container:
-            strong_tag = price_container.find('strong')
-            if strong_tag and strong_tag.get_text(strip=True):
-                price_text_content = strong_tag.get_text(strip=True)
-            elif price_container.get_text(strip=True): # Fallback to p's text if strong is missing or empty
-                price_text_content = price_container.get_text(strip=True)
+        summary_price = soup.select_one('div[role="rowgroup"] > div[role="row"]:has(> i:contains("Cena")) span.offer-summary__value')
+        if summary_price and summary_price.get_text(strip=True):
+            price_text_content = summary_price.get_text(strip=True)
+            # Get the currency from sibling text
+            currency_text = ''.join(summary_price.find_next_siblings(string=True)) or ''
+            if 'zł' in currency_text and 'zł' not in price_text_content:
+                price_text_content += ' zł'
+        else:
+            # Fallback to other selectors
+            price_container = soup.select_one('aside[role="complementary"] p.price, div.priceBox p.price')
+            if price_container:
+                strong_tag = price_container.find('strong')
+                if strong_tag and strong_tag.get_text(strip=True):
+                    price_text_content = strong_tag.get_text(strip=True)
+                elif price_container.get_text(strip=True):
+                    price_text_content = price_container.get_text(strip=True)
         
         # Attempt 2: itemprop="price" (if previous attempt failed or yielded empty/N/A)
         if price_text_content == 'N/A' or not price_text_content.strip():
