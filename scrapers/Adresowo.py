@@ -114,11 +114,30 @@ class AdresowoScraper(BaseScraper):
 
 
             price = 'N/A'
-            # Selectors for price might need adjustment
-            price_tag = section.select_one('.offer-summary__value')
-            if price_tag:
-                price_text = price_tag.get_text(strip=True)
-                price = price_text.replace('\xa0', ' ') 
+            # Find the div containing "Cena"
+            # The text "Cena" might be directly in the div or within other tags,
+            # so we search for a div that has "Cena" as part of its direct string content.
+            price_div_candidates = section.find_all('div', role='row')
+            price_container_div = None
+            for div_candidate in price_div_candidates:
+                # Check if 'Cena' is a direct text node or part of one.
+                # We use ' '.join(div_candidate.find_all(string=True, recursive=False)) to get direct text.
+                direct_text_content = ' '.join(text.strip() for text in div_candidate.find_all(string=True, recursive=False) if text.strip())
+                if 'Cena' in direct_text_content:
+                    price_container_div = div_candidate
+                    break
+            
+            if price_container_div:
+                price_span = price_container_div.find('span', class_='offer-summary__value')
+                if price_span:
+                    price_text = price_span.get_text(strip=True)
+                    price = price_text.replace('\xa0', ' ') 
+            else:
+                # Fallback to the previous broader selector if the specific one fails
+                price_tag_fallback = section.select_one('.offer-summary__value')
+                if price_tag_fallback:
+                    price_text = price_tag_fallback.get_text(strip=True)
+                    price = price_text.replace('\xa0', ' ')
             
             listing_data = {
                 'url': full_url,
