@@ -156,11 +156,20 @@ class AdresowoScraper(BaseScraper):
                         else:
                             area_m2 = 'N/A'
             
+            # Extract first image URL if available
+            first_image_url = None
+            image_tag = section.select_one('img[src], img[data-src]')
+            if image_tag:
+                first_image_url = image_tag.get('data-src') or image_tag.get('src')
+                if first_image_url and not first_image_url.startswith(('http://', 'https://')):
+                    first_image_url = self.base_url + first_image_url
+
             listing_data = {
                 'url': full_url,
                 'title': title,
                 'price': price,
-                'area_m2': area_m2
+                'area_m2': area_m2,
+                'first_image_url': first_image_url
             }
             listings.append(listing_data)
             
@@ -348,5 +357,13 @@ class AdresowoScraper(BaseScraper):
         
         details['image_count'] = image_count
         
+        # Extract first image URL from details page if not already set
+        if 'first_image_url' not in details or not details['first_image_url']:
+            img_tag = soup.select_one('#mainImage[src], #mainImage[data-src], img.gallery-slider__image[src], img.gallery-slider__image[data-src]')
+            if img_tag:
+                details['first_image_url'] = img_tag.get('data-src') or img_tag.get('src')
+                if details['first_image_url'] and not details['first_image_url'].startswith(('http://', 'https://')):
+                    details['first_image_url'] = self.base_url + details['first_image_url']
+
         print(f"[{self.site_name}] Parsed details: Title='{details.get('title', 'N/A')[:30]}...', Price='{details.get('price', 'N/A')}', ImgCount={details.get('image_count', 0)}")
         return details
