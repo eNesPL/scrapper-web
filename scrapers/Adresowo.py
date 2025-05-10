@@ -223,7 +223,7 @@ class AdresowoScraper(BaseScraper):
             details['title'] = og_title['content'].strip().replace(" | Adresowo.pl", "") if og_title and og_title.get('content') else 'N/A'
         
         # Price - check offer-summary first which is used on listing pages
-        price_text = 'N/A'
+        price_text_content = 'N/A'
         price_row = soup.select_one('div[role="row"]:has(> i:contains("Cena"))')
         if price_row:
             price_span = price_row.find('span', class_='offer-summary__value')
@@ -232,7 +232,9 @@ class AdresowoScraper(BaseScraper):
                 # Get full price row text to check for currency
                 full_row_text = ' '.join(price_row.stripped_strings)
                 if price_text.replace(' ', '').isdigit() and 'zł' in full_row_text:
-                    price_text = f"{price_text} zł"
+                    price_text_content = f"{price_text} zł"
+                else:
+                    price_text_content = price_text.replace('\xa0', ' ').strip()
         else:
             # Fallback to other selectors
             price_container = soup.select_one('aside[role="complementary"] p.price, div.priceBox p.price')
