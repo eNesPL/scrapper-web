@@ -4,23 +4,30 @@ import config
 
 app = Flask(__name__)
 
+import json
+
 def get_listings_from_db():
     """Fetch all listings from the database"""
     db_manager = DatabaseManager(config.DATABASE_NAME)
     conn = db_manager._get_connection()
     cursor = conn.cursor()
     
-    # Get all listings sorted by most recently updated
-    cursor.execute("""
-    SELECT * FROM listings 
-    ORDER BY last_updated DESC
-    """)
-    
-    listings = cursor.fetchall()
+    cursor.execute("SELECT * FROM listings ORDER BY last_updated DESC")
+    rows = cursor.fetchall()
     conn.close()
     
-    # Convert to list of dicts
-    return [dict(row) for row in listings]
+    listings = []
+    for row in rows:
+        listing = dict(row)
+        # Parse raw_data to extract additional fields
+        try:
+            raw_data = json.loads(listing['raw_data'])
+            listing['area_m2'] = raw_data.get('area_m2', 'N/A')
+        except (json.JSONDecodeError, KeyError) as e:
+            listing['area_m2'] = 'N/A'
+        listings.append(listing)
+    
+    return listings
 
 @app.route('/')
 def index():
