@@ -52,7 +52,7 @@ class AdresowoScraper(BaseScraper):
         It collects sections with class 'search-results__item' until a div
         with class 'search-block-similar' is found.
         :param html_content: str, HTML content of the listings page.
-        :return: List of dictionaries, each with at least a 'url', 'title', and 'price'.
+        :return: List of dictionaries, each with at least a 'url', 'title', 'price', and 'area_m2'.
         """
         if not html_content:
             print(f"[{self.site_name}] No HTML content to parse for listings.")
@@ -112,37 +112,62 @@ class AdresowoScraper(BaseScraper):
                            h2_inside = title_link_tag.find('h2')
                            if h2_inside: title = h2_inside.get_text(strip=True)
 
-
             price = 'N/A'
-            # Find the div containing "Cena"
-            # The text "Cena" might be directly in the div or within other tags,
-            # so we search for a div that has "Cena" as part of its direct string content.
-            price_div_candidates = section.find_all('div', role='row')
-            price_container_div = None
-            for div_candidate in price_div_candidates:
-                # Check if 'Cena' is a direct text node or part of one.
-                # We use ' '.join(div_candidate.find_all(string=True, recursive=False)) to get direct text.
-                direct_text_content = ' '.join(text.strip() for text in div_candidate.find_all(string=True, recursive=False) if text.strip())
-                if 'Cena' in direct_text_content:
-                    price_container_div = div_candidate
-                    break
-            
-            if price_container_div:
-                price_span = price_container_div.find('span', class_='offer-summary__value')
-                if price_span:
-                    price_text = price_span.get_text(strip=True)
-                    price = price_text.replace('\xa0', ' ') 
-            else:
-                # Fallback to the previous broader selector if the specific one fails
-                price_tag_fallback = section.select_one('.offer-summary__value')
-                if price_tag_fallback:
-                    price_text = price_tag_fallback.get_text(strip=True)
-                    price = price_text.replace('\xa0', ' ')
+            area_m2 = 'N/A'
+
+            # Iterate over all 'div' elements with 'role="row"' within the listing section
+            for row_div in section.find_all('div', attrs={'role': 'row'}):
+                # Get all text pieces within this div, join them for keyword searching
+                div_texts = list(row_div.stripped_strings)
+                div_full_text = " ".join(div_texts)
+
+                # Try to extract Price
+                if 'Cena' in div_full_text:
+                    price_span = row_div.find('span', class_='offer-summary__value')
+                    if price_span:
+                        price_text_content = price_span.get_text(strip=True)
+                        if any(char.isdigit() for char in price_text_content):
+                            price = price_text_content.replace('\xa0', ' ').strip()
+
+                # Try to extract Area (m2)
+                if 'Powierzchnia' in div_full_text:
+                    area_span = row_div.find('span', class_='offer-summary__value')
+                    if area_span:
+                        value_parts = [area_span.get_text(strip=True)]
+                        next_s = area_span.next_sibling
+                        while next_s:
+                            if isinstance(next_s, str): # Check if it's a NavigableString (text node)
+                                text_piece = next_s.strip()
+                                if text_piece:
+                                    # Heuristic: stop if text piece doesn't look like part of area value
+                                    if not (text_piece.startswith((',', '.')) or \
+                                            "m²" in text_piece or \
+                                            any(char.isdigit() for char in text_piece.replace('m²', '').strip())):
+                                        break
+                                    value_parts.append(text_piece)
+                            elif next_s.name: # It's a Tag, stop collecting text for area
+                                break
+                            else: # Unknown element type, stop
+                                break
+                            next_s = next_s.next_sibling
+                        
+                        full_area_str = "".join(value_parts)
+                        
+                        match = re.search(r'([\d,.]+)', full_area_str) # Extract numbers, comma, dot
+                        if match:
+                            extracted_num_str = match.group(1).replace(',', '.')
+                            if re.fullmatch(r'\d+(\.\d+)?', extracted_num_str): # Check if it's like "123" or "123.45"
+                                area_m2 = extracted_num_str
+                            elif re.fullmatch(r'\d+', area_span.get_text(strip=True)): # Fallback to span if complex parse failed
+                                area_m2 = area_span.get_text(strip=True)
+                        elif re.fullmatch(r'\d+', area_span.get_text(strip=True)): # Fallback if regex fails but span is number
+                            area_m2 = area_span.get_text(strip=True)
             
             listing_data = {
                 'url': full_url,
                 'title': title,
-                'price': price
+                'price': price,
+                'area_m2': area_m2
             }
             listings.append(listing_data)
             
