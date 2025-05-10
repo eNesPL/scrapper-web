@@ -308,25 +308,67 @@ class AdresowoScraper(BaseScraper):
 
         # Area (m2)
         area_text = 'N/A'
-        # Try to find area in div with "Powierzchnia" text
-        powierzchnia_divs = soup.find_all(lambda tag: tag.name == 'div' and 'Powierzchnia' in tag.text)
-        for div in powierzchnia_divs:
-            area_span = div.find('span', class_='offer-summary__value')
-            if area_span:
-                area_text = area_span.get_text(strip=True)
-                # Look for area unit (m²) in sibling text
-                area_unit = ''.join(area_span.find_next_siblings(string=True))
-                if 'm²' in area_unit and 'm²' not in area_text:
-                    area_text = f"{area_text} m²"
-                break
         
-        # Fallback: try to extract from description if not found in dedicated field
-        if area_text == 'N/A':
-            area_match = re.search(r'(\d+(?:[.,]\d+)?)\s*m[²2]', details['description'])
-            if area_match:
-                area_text = f"{area_match.group(1).replace(',', '.')} m²"
+        # Try to find area in div with "Powierzchnia" text, specifically targeting the structure provided
+        # Example structure: <div role="row">...Powierzchnia<br><span class="offer-summary__value">43</span>,10 m²</div>
+        
+        # Find all divs that might contain "Powierzchnia"
+        potential_area_containers = soup.find_all(lambda tag: tag.name == 'div' and 'Powierzchnia' in tag.get_text())
 
-        details['area_m2'] = area_text
+        for container in potential_area_containers:
+            # Check if this container directly holds the span.offer-summary__value for area
+            area_span = container.find('span', class_='offer-summary__value')
+            if area_span and 'Powierzchnia' in container.find(string=True, recursive=False): # Check if "Powierzchnia" is a direct text child before the span
+                
+                value_part = area_span.get_text(strip=True)
+                unit_part = ''
+                
+                # The unit might be part of the span's next sibling text node
+                # or part of the container's text after the span
+                if area_span.next_sibling and isinstance(area_span.next_sibling, str):
+                    unit_part = area_span.next_sibling.strip()
+                
+                if value_part and unit_part: # e.g., value_part = "43", unit_part = ",10 m²"
+                    # Combine and clean, removing potential extra spaces around comma
+                    combined_area = f"{value_part}{unit_part}".replace(" ", "").replace(",", ".")
+                    # Ensure m² is present and correctly formatted
+                    if 'm²' not in combined_area:
+                         # Attempt to re-add m² if it was lost, or if only number was found
+                        area_match_val = re.search(r'(\d[\d.,]*)', combined_area)
+                        if area_match_val:
+                            area_text = f"{area_match_val.group(1).replace(',', '.')} m²"
+                        else: # Fallback if regex fails
+                            area_text = f"{combined_area} m²" 
+                    else: # If m² is already there, just use it
+                        area_text = combined_area.replace("m2", "m²") # Normalize to m²
+                    break # Found and processed area
+
+            # Fallback for slightly different structures within the container
+            elif area_span: # If span is found but "Powierzchnia" is not a direct child text
+                # This logic is similar to the original, but scoped within a "Powierzchnia" container
+                temp_area_text = area_span.get_text(strip=True)
+                temp_area_unit = ''.join(s.strip() for s in area_span.next_siblings if isinstance(s, str))
+                
+                # Check if the unit is directly after the span
+                if 'm²' in temp_area_unit:
+                    area_text = f"{temp_area_text}{temp_area_unit}".replace(" ", "").replace(",",".")
+                    if 'm²' not in area_text: # Ensure m² is present
+                        area_text = f"{area_text.replace('m2','')} m²" # Add m² if missing
+                    else:
+                        area_text = area_text.replace("m2", "m²")
+                    break 
+                # If unit is not directly after, but value is numeric, assume m²
+                elif re.match(r'^[\d.,\s]+$', temp_area_text):
+                    area_text = f"{temp_area_text.replace(' ','').replace(',','.')} m²"
+                    break
+        
+        # Fallback: try to extract from description if not found in dedicated field and still N/A
+        if area_text == 'N/A' and 'description' in details and details['description'] != 'N/A':
+            area_match_desc = re.search(r'(\d+(?:[.,]\d+)?)\s*m[²2]', details['description'])
+            if area_match_desc:
+                area_text = f"{area_match_desc.group(1).replace(',', '.')} m²"
+
+        details['area_m2'] = area_text.strip() if area_text != 'N/A' else 'N/A'
 
         # Description
         description_tag = soup.select_one('div.description[itemprop="description"], section#description div.text') # Added alternative selector
