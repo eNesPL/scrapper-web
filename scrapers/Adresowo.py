@@ -294,6 +294,28 @@ class AdresowoScraper(BaseScraper):
             details['price'] = 'N/A'
 
 
+        # Area (m2)
+        area_text = 'N/A'
+        # Try to find area in div with "Powierzchnia" text
+        powierzchnia_divs = soup.find_all(lambda tag: tag.name == 'div' and 'Powierzchnia' in tag.text)
+        for div in powierzchnia_divs:
+            area_span = div.find('span', class_='offer-summary__value')
+            if area_span:
+                area_text = area_span.get_text(strip=True)
+                # Look for area unit (m²) in sibling text
+                area_unit = ''.join(area_span.find_next_siblings(string=True))
+                if 'm²' in area_unit and 'm²' not in area_text:
+                    area_text = f"{area_text} m²"
+                break
+        
+        # Fallback: try to extract from description if not found in dedicated field
+        if area_text == 'N/A':
+            area_match = re.search(r'(\d+(?:[.,]\d+)?)\s*m[²2]', details['description'])
+            if area_match:
+                area_text = f"{area_match.group(1).replace(',', '.')} m²"
+
+        details['area_m2'] = area_text
+
         # Description
         description_tag = soup.select_one('div.description[itemprop="description"], section#description div.text') # Added alternative selector
         if description_tag:
