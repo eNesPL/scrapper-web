@@ -67,7 +67,6 @@ class BaseScraper(ABC):
         """
         if not self.db_manager or not self.notification_manager:
             print(f"[{self.site_name}] Error: DatabaseManager or NotificationManager not provided. Cannot proceed with full scrape.")
-            # Optionally, could fall back to just printing data if desired, but for now, let's require them.
             return [] 
 
         print(f"[{self.site_name}] Starting scrape with criteria: {search_criteria}")
@@ -94,11 +93,9 @@ class BaseScraper(ABC):
                 print(f"[{self.site_name}] Warning: Listing summary does not contain a 'url'. Skipping.")
                 continue
 
-            # Fetch and parse details
             details_page_html = self.fetch_listing_details_page(listing_url)
             if not details_page_html:
                 print(f"[{self.site_name}] Failed to fetch details page for {listing_url}. Skipping.")
-                # Optionally, update last_checked if it exists in DB but couldn't be fetched now
                 if self.db_manager.get_listing_by_url(listing_url):
                     self.db_manager.update_last_checked(listing_url)
                 continue
@@ -110,26 +107,26 @@ class BaseScraper(ABC):
                     self.db_manager.update_last_checked(listing_url)
                 continue
             
-            # Combine summary and detailed data. Detailed data takes precedence.
-            # Ensure essential fields for DB/notification are present
             current_listing_data = {
                 **summary, 
                 **detailed_data,
-                'url': listing_url, # Ensure URL is consistently from summary or details
+                'url': listing_url,
                 'site_name': self.site_name
             }
             
-            # Ensure all tracked fields have a default if not provided by scraper
-            for field in TRACKED_FIELDS_FOR_NOTIFICATION:
+            # Ensure all tracked fields and other key fields have a default if not provided by scraper
+            # This includes fields for DB columns and notification tracking.
+            key_fields_to_default = set(TRACKED_FIELDS_FOR_NOTIFICATION + ['title', 'first_image_url'])
+            for field in key_fields_to_default:
                 current_listing_data.setdefault(field, None)
-            current_listing_data.setdefault('title', 'N/A')
+            # Ensure image_count has a numeric default if None
+            if current_listing_data.get('image_count') is None:
+                 current_listing_data['image_count'] = 0
 
 
-            # --- Database and Notification Logic ---
             existing_listing_row = self.db_manager.get_listing_by_url(listing_url)
 
             if not existing_listing_row:
-                # New listing
                 db_insert_data = {
                     'url': listing_url,
                     'site_name': self.site_name,
@@ -137,63 +134,50 @@ class BaseScraper(ABC):
                     'price': current_listing_data.get('price'),
                     'description': current_listing_data.get('description'),
                     'image_count': current_listing_data.get('image_count'),
-                    'raw_data': current_listing_data # Store all scraped data
+                    'first_image_url': current_listing_data.get('first_image_url'), # Added
+                    'raw_data': current_listing_data 
                 }
                 self.db_manager.add_listing(db_insert_data)
                 
-                # Send notification for new listing
                 notif_embed = self.notification_manager.format_new_listing_embed(current_listing_data)
                 self.notification_manager.send_notification(embed=notif_embed)
                 print(f"[{self.site_name}] Added new listing to DB and sent notification: {listing_url}")
 
             else:
-                # Existing listing, check for updates
-                changes = []
-                update_payload_for_db = {} # Only fields that changed + raw_data
+                changes_for_notification = []
+                update_payload_for_db = {}
 
-                # Load raw_data from DB to get all previously stored fields
-                try:
-                    # existing_raw_data = json.loads(existing_listing_row['raw_data']) if existing_listing_row['raw_data'] else {}
-                    # For direct comparison, use the specific columns from the DB
-                    existing_db_values = {
-                        'price': existing_listing_row['price'],
-                        'description': existing_listing_row['description'],
-                        'image_count': existing_listing_row['image_count']
-                        # Add other specific fields from DB if needed for comparison
-                    }
+                # Fields that can be directly updated in the DB columns
+                fields_to_check_for_update = ['title', 'price', 'description', 'image_count', 'first_image_url']
 
-                except json.JSONDecodeError:
-                    # existing_raw_data = {}
-                    print(f"[{self.site_name}] Warning: Could not parse existing raw_data for {listing_url}")
-                
-                for field in TRACKED_FIELDS_FOR_NOTIFICATION:
-                    old_value = existing_db_values.get(field)
+                for field in fields_to_check_for_update:
+                    old_value = existing_listing_row[field]
                     new_value = current_listing_data.get(field)
 
-                    # Normalize types for comparison if necessary (e.g. int vs str for image_count)
                     if field == 'image_count':
                         try:
                             old_value = int(old_value) if old_value is not None else None
                             new_value = int(new_value) if new_value is not None else None
                         except (ValueError, TypeError):
-                             # If conversion fails, compare as is or log error
-                            pass
-
+                            pass 
 
                     if old_value != new_value:
-                        changes.append((field, str(old_value)[:50], str(new_value)[:50])) # Store change: field, old, new (truncate for log/notif)
                         update_payload_for_db[field] = new_value
+                        if field in TRACKED_FIELDS_FOR_NOTIFICATION:
+                            changes_for_notification.append((field, str(old_value)[:50], str(new_value)[:50]))
                 
-                if changes:
-                    print(f"[{self.site_name}] Detected changes for {listing_url}: {changes}")
-                    update_payload_for_db['raw_data'] = current_listing_data # Always update raw_data if anything changed
+                if update_payload_for_db:
+                    print(f"[{self.site_name}] Detected DB updates for {listing_url}: {list(update_payload_for_db.keys())}")
+                    update_payload_for_db['raw_data'] = current_listing_data 
                     self.db_manager.update_listing(listing_url, update_payload_for_db)
                     
-                    notif_embed = self.notification_manager.format_updated_listing_embed(current_listing_data, changes)
-                    self.notification_manager.send_notification(embed=notif_embed)
-                    print(f"[{self.site_name}] Updated listing in DB and sent notification: {listing_url}")
+                    if changes_for_notification:
+                        print(f"[{self.site_name}] Sending notification for changes: {changes_for_notification}")
+                        notif_embed = self.notification_manager.format_updated_listing_embed(current_listing_data, changes_for_notification)
+                        self.notification_manager.send_notification(embed=notif_embed)
+                    else:
+                         print(f"[{self.site_name}] Updated listing in DB (non-notified fields changed): {listing_url}")
                 else:
-                    # No tracked changes, just update the last_checked timestamp
                     self.db_manager.update_last_checked(listing_url)
                     print(f"[{self.site_name}] No significant changes for {listing_url}. Updated last_checked time.")
 

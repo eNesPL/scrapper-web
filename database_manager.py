@@ -51,7 +51,7 @@ class DatabaseManager:
         
         # Ensure all expected keys are present, defaulting to None if not
         # This also helps define the structure of 'data' expected by this method
-        keys = ['url', 'site_name', 'title', 'price', 'description', 'image_count']
+        keys = ['url', 'site_name', 'title', 'price', 'description', 'image_count', 'first_image_url'] # Added first_image_url
         listing_data_tuple = (
             data.get('url'),
             data.get('site_name'),
@@ -59,6 +59,7 @@ class DatabaseManager:
             data.get('price'),
             data.get('description'),
             data.get('image_count'),
+            data.get('first_image_url'), # Added first_image_url
             json.dumps(data), # Store all data as JSON
             datetime.datetime.now(), # last_updated
             datetime.datetime.now()  # last_checked
@@ -66,8 +67,8 @@ class DatabaseManager:
 
         try:
             cursor.execute("""
-            INSERT INTO listings (url, site_name, title, price, description, image_count, raw_data, last_updated, last_checked)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO listings (url, site_name, title, price, description, image_count, first_image_url, raw_data, last_updated, last_checked)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, listing_data_tuple)
             conn.commit()
             print(f"Added new listing: {data.get('url')}")
@@ -85,8 +86,10 @@ class DatabaseManager:
         # Prepare the SET part of the SQL query dynamically
         set_clauses = []
         values = []
+        # Allowed fields to update directly in columns
+        allowed_fields_to_update = ['title', 'price', 'description', 'image_count', 'first_image_url', 'raw_data', 'site_name']
         for key, value in update_data.items():
-            if key in ['title', 'price', 'description', 'image_count', 'raw_data', 'site_name']: # Allowed fields to update
+            if key in allowed_fields_to_update: 
                 set_clauses.append(f"{key} = ?")
                 values.append(json.dumps(value) if key == 'raw_data' else value)
         
