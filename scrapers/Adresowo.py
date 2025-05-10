@@ -222,19 +222,31 @@ class AdresowoScraper(BaseScraper):
             og_title = soup.find('meta', property='og:title')
             details['title'] = og_title['content'].strip().replace(" | Adresowo.pl", "") if og_title and og_title.get('content') else 'N/A'
         
-        # Price - check offer-summary first which is used on listing pages
+        # Price - multiple fallback approaches
         price_text_content = 'N/A'
-        price_row = soup.select_one('div[role="row"]:has(> i:contains("Cena"))')
-        if price_row:
-            price_span = price_row.find('span', class_='offer-summary__value')
+        
+        # Try 1: Look for price in div with "Cena" text
+        cena_divs = soup.find_all(lambda tag: tag.name == 'div' and 'Cena' in tag.text)
+        for div in cena_divs:
+            price_span = div.find('span', class_='offer-summary__value')
             if price_span:
-                price_text = price_span.get_text(strip=True)
-                # Get full price row text to check for currency
-                full_row_text = ' '.join(price_row.stripped_strings)
-                if price_text.replace(' ', '').isdigit() and 'zł' in full_row_text:
-                    price_text_content = f"{price_text} zł"
-                else:
-                    price_text_content = price_text.replace('\xa0', ' ').strip()
+                price_text = price_span.get_text(strip=True).replace('\xa0', ' ')
+                currency_text = ''.join(price_span.find_next_siblings(string=True))
+                if price_text and any(c.isdigit() for c in price_text):
+                    if 'zł' in currency_text and 'zł' not in price_text:
+                        price_text_content = f"{price_text} zł"
+                    else:
+                        price_text_content = price_text
+                    break
+                    
+        # Try 2: Look for price in banners or section headers if first approach failed
+        if price_text_content == 'N/A':
+            price_banners = soup.select('h2, h3, .priceBox, .price-container')
+            for banner in price_banners:
+                price_match = re.search(r'(\d[\d\s]*)\s*z[łl]', banner.get_text(), re.IGNORECASE)
+                if price_match:
+                    price_text_content = f"{price_match.group(1).strip()} zł"
+                    break
         else:
             # Fallback to other selectors
             price_container = soup.select_one('aside[role="complementary"] p.price, div.priceBox p.price')
