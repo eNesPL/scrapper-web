@@ -39,7 +39,7 @@ class AdresowoScraper(BaseScraper):
     def parse_listings(self, html_content):
         """
         Parses the listings page HTML to extract individual listing URLs or summary data.
-        It collects sections with class 'search-results__block' until a section
+        It collects sections with class 'search-results__item' until a section
         with class 'search-block-similar' is found.
         :param html_content: str, HTML content of the listings page.
         :return: List of dictionaries, each with at least a 'url', 'title', and 'price'.
@@ -64,10 +64,10 @@ class AdresowoScraper(BaseScraper):
                 print(f"[{self.site_name}] Encountered 'search-block-similar', stopping collection of listing sections.")
                 break  # Stop processing further sections
             
-            if 'search-results__block' in current_classes:
+            if 'search-results__item' in current_classes: # Corrected class name
                 collected_listing_sections.append(section_tag)
         
-        print(f"[{self.site_name}] Identified {len(collected_listing_sections)} sections with class 'search-results__block' before 'search-block-similar'.")
+        print(f"[{self.site_name}] Identified {len(collected_listing_sections)} sections with class 'search-results__item' before 'search-block-similar'.")
 
         for section in collected_listing_sections:
             url_suffix = section.get('data-href')
@@ -84,7 +84,7 @@ class AdresowoScraper(BaseScraper):
             full_url = self.base_url + url_suffix
 
             title = 'N/A'
-            # Selectors for title might need adjustment based on the internal structure of 'search-results__block'
+            # Selectors for title might need adjustment based on the internal structure of 'search-results__item'
             title_tag_h2 = section.select_one('div.title-container a.title h2, div.title-container h2.title a, h2.offer-title a, a.title h2') 
             if title_tag_h2:
                 title = title_tag_h2.get_text(strip=True)
