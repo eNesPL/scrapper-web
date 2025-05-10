@@ -2,6 +2,12 @@ import importlib
 import os
 import inspect
 import sys
+import datetime # Required for NotificationManager embeds
+
+# Import new managers and config
+from database_manager import DatabaseManager
+from notification_manager import NotificationManager
+import config
 
 # This will be dynamically populated by discover_scrapers
 # We need to ensure scrapers.base_scraper can be imported first
@@ -13,13 +19,10 @@ def discover_scrapers(scrapers_package_dir="scrapers"):
     Dynamically discovers scraper classes in the specified directory.
     Scraper classes must inherit from BaseScraper.
     """
-    # Import BaseScraper here after sys.path is potentially adjusted
-    # This is crucial if main.py is not in the project root or for some execution contexts
-    from scrapers.base_scraper import BaseScraper
+    from scrapers.base_scraper import BaseScraper # Import here after sys.path adjustment
 
     scraper_classes = {}
     
-    # Construct the absolute path to the scrapers directory
     base_dir = os.path.dirname(os.path.abspath(__file__))
     scrapers_abs_path = os.path.join(base_dir, scrapers_package_dir)
 
@@ -50,18 +53,18 @@ def discover_scrapers(scrapers_package_dir="scrapers"):
 def main():
     print("Real Estate Scraper Framework")
     
-    # Adjust Python path to include the project root directory (parent of 'scrapers')
-    # This allows 'from scrapers.base_scraper import BaseScraper' and
-    # 'importlib.import_module(f"scrapers.{module_name}")' to work reliably.
     current_script_dir = os.path.dirname(os.path.abspath(__file__))
-    project_root = current_script_dir # Assuming main.py is in the project root
-    
-    # If main.py is in a subfolder and 'scrapers' is a sibling of that subfolder's parent,
-    # you might need project_root = os.path.dirname(current_script_dir)
+    project_root = current_script_dir
     
     if project_root not in sys.path:
         sys.path.insert(0, project_root)
-        # print(f"Added {project_root} to sys.path") # For debugging
+
+    # Initialize DatabaseManager
+    db_manager = DatabaseManager(config.DATABASE_NAME)
+    db_manager.init_db()
+
+    # Initialize NotificationManager
+    notification_manager = NotificationManager(config.DISCORD_WEBHOOK_URL)
 
     available_scrapers = discover_scrapers()
 
@@ -74,20 +77,17 @@ def main():
     scraper_display_list = []
     for i, (class_name, scraper_class) in enumerate(available_scrapers.items()):
         try:
-            # Temporarily instantiate to get site_name if defined in __init__
-            # Assumes scraper __init__ can be called without arguments or has defaults
-            temp_instance = scraper_class()
+            # Instantiate with None for managers during discovery, site_name is primary
+            # Scraper __init__ must handle db_manager and notification_manager being None
+            temp_instance = scraper_class(db_manager=None, notification_manager=None)
             site_display_name = temp_instance.site_name
-        except TypeError: # If __init__ requires arguments
-            site_display_name = f"{class_name} (requires arguments for initialization)"
+        except TypeError as e: 
+            site_display_name = f"{class_name} (Error: __init__ signature mismatch? {e})"
         except Exception as e:
-            site_display_name = f"{class_name} (Error during init: {e})"
+            site_display_name = f"{class_name} (Error during init for discovery: {e})"
         
         scraper_display_list.append({'id': i + 1, 'name': site_display_name, 'class_name': class_name, 'class': scraper_class})
         print(f"{i + 1}. {site_display_name} (Class: {class_name})")
-
-    # Example: Run a scraper (e.g., the first one or a specific one)
-    # In a real application, you'd let the user choose or configure this.
     
     scraper_to_run_class_name = "ExampleSiteScraper" # Default to example
     
@@ -102,12 +102,12 @@ def main():
         print(f"\nAttempting to run scraper: {selected_scraper_info['name']}")
         
         try:
-            scraper_instance = SelectedScraperClass()
+            # Instantiate with actual managers for the run
+            scraper_instance = SelectedScraperClass(db_manager=db_manager, notification_manager=notification_manager)
         except Exception as e:
-            print(f"Could not instantiate {selected_scraper_info['class_name']}: {e}")
+            print(f"Could not instantiate {selected_scraper_info['class_name']} with managers: {e}")
             return
 
-        # Define search criteria (this would typically come from user input or config)
         search_criteria = {
             'location': 'Sample City',
             'property_type': 'apartment',
@@ -115,17 +115,12 @@ def main():
         }
 
         print(f"Running scraper: {scraper_instance.site_name} with criteria: {search_criteria}")
-        scraped_data = scraper_instance.scrape(search_criteria)
+        # The scrape method now handles DB and notifications internally
+        scraper_instance.scrape(search_criteria) 
 
-        if scraped_data:
-            print(f"\n--- Scraped Data from {scraper_instance.site_name} ---")
-            for i, item in enumerate(scraped_data):
-                print(f"--- Property {i+1} ---")
-                for key, value in item.items():
-                    print(f"  {key}: {value}")
-                print("-" * 20)
-        else:
-            print(f"No data scraped from {scraper_instance.site_name}.")
+        print(f"\nScraping process completed for {scraper_instance.site_name}.")
+        # Optionally, display data from DB or summary stats here
+        
     elif not scraper_display_list:
         print("No scrapers available to run.")
     else:
