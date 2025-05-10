@@ -190,26 +190,52 @@ class AdresowoScraper(BaseScraper):
             details['title'] = og_title['content'].strip().replace(" | Adresowo.pl", "") if og_title and og_title.get('content') else 'N/A'
         
         # Price
-        price_text_content = 'N/A'
-        # Primary selector based on live page structure for the example URL
+        price_text_content = 'N/A' # Default
+
+        # Attempt 1: Primary selector (aside[role="complementary"] p.price, div.priceBox p.price)
         price_container = soup.select_one('aside[role="complementary"] p.price, div.priceBox p.price')
         if price_container:
             strong_tag = price_container.find('strong')
-            if strong_tag:
+            if strong_tag and strong_tag.get_text(strip=True):
                 price_text_content = strong_tag.get_text(strip=True)
-            else:
-                price_text_content = price_container.get_text(strip=True) # Fallback to p's text if strong is missing
-        else:
-            # Broader fallback if the main aside/div.priceBox structure isn't found
+            elif price_container.get_text(strip=True): # Fallback to p's text if strong is missing or empty
+                price_text_content = price_container.get_text(strip=True)
+        
+        # Attempt 2: itemprop="price" (if previous attempt failed or yielded empty/N/A)
+        if price_text_content == 'N/A' or not price_text_content.strip():
+            price_itemprop_tag = soup.find(attrs={"itemprop": "price"})
+            if price_itemprop_tag:
+                temp_price = ''
+                if price_itemprop_tag.name == 'meta': # Check if it's a meta tag
+                    temp_price = price_itemprop_tag.get('content', '').strip()
+                else: # Otherwise, get text from the tag
+                    temp_price = price_itemprop_tag.get_text(strip=True)
+                
+                if temp_price: # If we got a non-empty string
+                    price_text_content = temp_price
+
+        # Attempt 3: OpenGraph meta tags (og:price:amount) (if previous attempts failed or yielded empty/N/A)
+        if price_text_content == 'N/A' or not price_text_content.strip():
+            og_price_amount = soup.find('meta', property='og:price:amount')
+            if og_price_amount and og_price_amount.get('content', '').strip():
+                price_text_content = og_price_amount['content'].strip()
+
+        # Attempt 4: Broader fallback (generic p.price) (if previous attempts failed or yielded empty/N/A)
+        if price_text_content == 'N/A' or not price_text_content.strip():
             price_tag_fallback = soup.select_one('p.price') # Generic p.price
             if price_tag_fallback:
                 strong_tag = price_tag_fallback.find('strong')
-                if strong_tag:
+                if strong_tag and strong_tag.get_text(strip=True):
                     price_text_content = strong_tag.get_text(strip=True)
-                else:
+                elif price_tag_fallback.get_text(strip=True): # Fallback to p's text if strong is missing or empty
                     price_text_content = price_tag_fallback.get_text(strip=True)
         
-        details['price'] = price_text_content.replace('\xa0', ' ') if price_text_content != 'N/A' else 'N/A'
+        # Final processing and assignment
+        # Ensure 'N/A' is used if price_text_content is empty, whitespace, or still 'N/A'
+        if price_text_content and price_text_content.strip() and price_text_content != 'N/A':
+            details['price'] = price_text_content.replace('\xa0', ' ').strip()
+        else:
+            details['price'] = 'N/A'
 
 
         # Description
