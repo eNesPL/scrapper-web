@@ -49,7 +49,7 @@ class AdresowoScraper(BaseScraper):
     def parse_listings(self, html_content):
         """
         Parses the listings page HTML to extract individual listing URLs or summary data.
-        It collects sections with class 'search-results__item' until a section
+        It collects sections with class 'search-results__item' until a div
         with class 'search-block-similar' is found.
         :param html_content: str, HTML content of the listings page.
         :return: List of dictionaries, each with at least a 'url', 'title', and 'price'.
@@ -61,23 +61,25 @@ class AdresowoScraper(BaseScraper):
         soup = BeautifulSoup(html_content, 'html.parser')
         listings = []
         
-        # Find all <section> elements. We will iterate through them.
-        all_section_tags = soup.find_all('section')
+        # Find all tags that are either a listing item or the stopper div, in document order.
+        all_relevant_tags = soup.find_all(
+            lambda tag: (tag.name == 'section' and 'search-results__item' in tag.get('class', [])) or \
+                        (tag.name == 'div' and 'search-block-similar' in tag.get('class', []))
+        )
         
-        print(f"[{self.site_name}] Found {len(all_section_tags)} total <section> tags to inspect.")
+        print(f"[{self.site_name}] Found {len(all_relevant_tags)} relevant tags (listing items or stopper) to process.")
 
         collected_listing_sections = []
-        for section_tag in all_section_tags:
-            current_classes = section_tag.get('class', [])
+        for tag in all_relevant_tags:
+            # Check if the current tag is the stopper div
+            if tag.name == 'div' and 'search-block-similar' in tag.get('class', []):
+                print(f"[{self.site_name}] Encountered 'search-block-similar' div, stopping collection of listing sections.")
+                break  # Stop processing further tags
             
-            if 'search-block-similar' in current_classes:
-                print(f"[{self.site_name}] Encountered 'search-block-similar', stopping collection of listing sections.")
-                break  # Stop processing further sections
-            
-            if 'search-results__item' in current_classes: # Corrected class name
-                collected_listing_sections.append(section_tag)
+            # If it's not the stopper, the lambda ensures it's a 'section' with 'search-results__item'.
+            collected_listing_sections.append(tag)
         
-        print(f"[{self.site_name}] Identified {len(collected_listing_sections)} sections with class 'search-results__item' before 'search-block-similar'.")
+        print(f"[{self.site_name}] Collected {len(collected_listing_sections)} listing sections before encountering stopper.")
 
         for section in collected_listing_sections:
             url_suffix = section.get('data-href')
