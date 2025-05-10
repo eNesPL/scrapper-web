@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Real Estate Listings</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .listing { 
+            border: 1px solid #ddd; 
+            padding: 15px; 
+            margin-bottom: 15px;
+            border-radius: 5px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .listing h2 { margin-top: 0; }
+        .price { 
+            color: #c1403d;
+            font-weight: bold;
+            font-size: 1.2em; 
+        }
+        .meta { color: #666; margin: 5px 0; }
+        .description { margin-top: 10px; }
+        .last-updated { font-size: 0.8em; color: #999; }
+        a { color: #0066cc; text-decoration: none; }
+        a:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <h1>Real Estate Listings</h1>
+    
+    <div class="listings">
+        {% for listing in listings %}
+        <div class="listing">
+            <h2><a href="{{ listing.url }}" target="_blank">{{ listing.title }}</a></h2>
+            <div class="price">{{ listing.price }}</div>
+            <div class="meta">
+                <span>Area: {{ listing.area_m2 or 'N/A' }}</span> | 
+                <span>Images: {{ listing.image_count }}</span> | 
+                <span>Source: {{ listing.site_name }}</span>
+            </div>
+            <div class="description">
+                {{ listing.description[:200] }}{% if listing.description|length > 200 %}...{% endif %}
+            </div>
+            <div class="last-updated">
+                Last updated: {{ listing.last_updated }}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</body>
+</html>
