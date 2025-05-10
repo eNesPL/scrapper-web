@@ -158,11 +158,29 @@ class AdresowoScraper(BaseScraper):
             
             # Extract first image URL if available
             first_image_url = None
-            image_tag = section.select_one('img[src], img[data-src]')
-            if image_tag:
-                first_image_url = image_tag.get('data-src') or image_tag.get('src')
-                if first_image_url and not first_image_url.startswith(('http://', 'https://')):
-                    first_image_url = self.base_url + first_image_url
+            # Try multiple common image selectors used on listing cards
+            img_selectors = [
+                'img.offer-card-img',
+                'img.thumbnail__img',
+                'img.picture__img',
+                'img[data-lazy]',
+                'img[src]',
+                'img[data-src]'
+            ]
+            for selector in img_selectors:
+                image_tag = section.select_one(selector)
+                if image_tag:
+                    first_image_url = image_tag.get('data-src') or image_tag.get('src') or image_tag.get('data-lazy')
+                    if first_image_url:
+                        # Make relative URLs absolute
+                        if first_image_url.startswith('//'):
+                            first_image_url = 'https:' + first_image_url
+                        elif not first_image_url.startswith(('http://', 'https://')):
+                            if first_image_url.startswith('/'):
+                                first_image_url = self.base_url + first_image_url
+                            else:
+                                first_image_url = self.base_url + '/' + first_image_url
+                        break
 
             listing_data = {
                 'url': full_url,
@@ -359,11 +377,26 @@ class AdresowoScraper(BaseScraper):
         
         # Extract first image URL from details page if not already set
         if 'first_image_url' not in details or not details['first_image_url']:
-            img_tag = soup.select_one('#mainImage[src], #mainImage[data-src], img.gallery-slider__image[src], img.gallery-slider__image[data-src]')
-            if img_tag:
-                details['first_image_url'] = img_tag.get('data-src') or img_tag.get('src')
-                if details['first_image_url'] and not details['first_image_url'].startswith(('http://', 'https://')):
-                    details['first_image_url'] = self.base_url + details['first_image_url']
+            img_selectors = [
+                '#mainImage[src], #mainImage[data-src]',
+                'img.gallery-slider__image[src], img.gallery-slider__image[data-src]',
+                'img.photo-gallery__img[src], img.photo-gallery__img[data-src]',
+                'img.offer-gallery__img[src], img.offer-gallery__img[data-src]'
+            ]
+            for selector in img_selectors:
+                img_tag = soup.select_one(selector)
+                if img_tag:
+                    details['first_image_url'] = img_tag.get('data-src') or img_tag.get('src')
+                    if details['first_image_url']:
+                        # Make relative URLs absolute
+                        if details['first_image_url'].startswith('//'):
+                            details['first_image_url'] = 'https:' + details['first_image_url']
+                        elif not details['first_image_url'].startswith(('http://', 'https://')):
+                            if details['first_image_url'].startswith('/'):
+                                details['first_image_url'] = self.base_url + details['first_image_url']
+                            else:
+                                details['first_image_url'] = self.base_url + '/' + details['first_image_url']
+                        break
 
         print(f"[{self.site_name}] Parsed details: Title='{details.get('title', 'N/A')[:30]}...', Price='{details.get('price', 'N/A')}', ImgCount={details.get('image_count', 0)}")
         return details
