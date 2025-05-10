@@ -141,35 +141,20 @@ class AdresowoScraper(BaseScraper):
                 if 'Powierzchnia' in div_full_text:
                     area_span = row_div.find('span', class_='offer-summary__value')
                     if area_span:
-                        value_parts = [area_span.get_text(strip=True)]
-                        next_s = area_span.next_sibling
-                        while next_s:
-                            if isinstance(next_s, str): # Check if it's a NavigableString (text node)
-                                text_piece = next_s.strip()
-                                if text_piece:
-                                    # Heuristic: stop if text piece doesn't look like part of area value
-                                    if not (text_piece.startswith((',', '.')) or \
-                                            "m²" in text_piece or \
-                                            any(char.isdigit() for char in text_piece.replace('m²', '').strip())):
-                                        break
-                                    value_parts.append(text_piece)
-                            elif next_s.name: # It's a Tag, stop collecting text for area
-                                break
-                            else: # Unknown element type, stop
-                                break
-                            next_s = next_s.next_sibling
+                        # Get all text including siblings that might contain units
+                        area_text = area_span.get_text(strip=True)
+                        siblings_text = ''.join(s.strip() for s in area_span.next_siblings if isinstance(s, str))
+                        full_area_text = f"{area_text}{siblings_text}"
                         
-                        full_area_str = "".join(value_parts)
-                        
-                        match = re.search(r'([\d,.]+)', full_area_str) # Extract numbers, comma, dot
-                        if match:
-                            extracted_num_str = match.group(1).replace(',', '.')
-                            if re.fullmatch(r'\d+(\.\d+)?', extracted_num_str): # Check if it's like "123" or "123.45"
-                                area_m2 = extracted_num_str
-                            elif re.fullmatch(r'\d+', area_span.get_text(strip=True)): # Fallback to span if complex parse failed
-                                area_m2 = area_span.get_text(strip=True)
-                        elif re.fullmatch(r'\d+', area_span.get_text(strip=True)): # Fallback if regex fails but span is number
-                            area_m2 = area_span.get_text(strip=True)
+                        # Try to extract area value with potential decimal point/comma
+                        area_match = re.search(r'(\d[\d\s]*(?:[.,]\d+)?)\s*(?:m²|m2|m\W*2)?', full_area_text)
+                        if area_match:
+                            area_m2 = f"{area_match.group(1).replace(',', '.').replace(' ', '')} m²"
+                        # Fallback to just the span text if extraction fails
+                        elif area_text:
+                            area_m2 = f"{area_text} m²"
+                        else:
+                            area_m2 = 'N/A'
             
             listing_data = {
                 'url': full_url,
