@@ -43,7 +43,7 @@ def discover_scrapers(scrapers_package_dir="scrapers"):
                        issubclass(obj, BaseScraper) and \
                        obj is not BaseScraper:
                         scraper_classes[name] = obj
-                        print(f"Discovered scraper: {name} from {full_module_path}")
+                        # Removed print from here, will be listed later
             except ImportError as e:
                 print(f"Error importing module {full_module_path}: {e}")
             except Exception as e:
@@ -66,19 +66,20 @@ def main():
     # Initialize NotificationManager
     notification_manager = NotificationManager(config.DISCORD_WEBHOOK_URL)
 
-    available_scrapers = discover_scrapers()
+    available_scrapers_dict = discover_scrapers()
 
-    if not available_scrapers:
+    if not available_scrapers_dict:
         print("No scrapers found. Make sure scraper modules are in the 'scrapers' directory,")
         print("inherit from BaseScraper, and that 'scrapers/__init__.py' exists.")
         return
 
     print("\nAvailable scrapers:")
     scraper_display_list = []
-    for i, (class_name, scraper_class) in enumerate(available_scrapers.items()):
+    # Sort scrapers by class name for consistent ordering
+    sorted_scraper_items = sorted(available_scrapers_dict.items())
+
+    for i, (class_name, scraper_class) in enumerate(sorted_scraper_items):
         try:
-            # Instantiate with None for managers during discovery, site_name is primary
-            # Scraper __init__ must handle db_manager and notification_manager being None
             temp_instance = scraper_class(db_manager=None, notification_manager=None)
             site_display_name = temp_instance.site_name
         except TypeError as e: 
@@ -89,13 +90,25 @@ def main():
         scraper_display_list.append({'id': i + 1, 'name': site_display_name, 'class_name': class_name, 'class': scraper_class})
         print(f"{i + 1}. {site_display_name} (Class: {class_name})")
     
-    scraper_to_run_class_name = "ExampleSiteScraper" # Default to example
-    
-    selected_scraper_info = next((s for s in scraper_display_list if s['class_name'] == scraper_to_run_class_name), None)
+    selected_scraper_info = None
+    if not scraper_display_list: # Should be caught by available_scrapers_dict check, but good for safety
+        print("No scrapers available to run.")
+        return
 
-    if not selected_scraper_info and scraper_display_list:
-        print(f"\nScraper '{scraper_to_run_class_name}' not found. Running the first available scraper.")
-        selected_scraper_info = scraper_display_list[0]
+    while True:
+        try:
+            choice_str = input(f"\nEnter the number of the scraper to run (1-{len(scraper_display_list)}): ")
+            choice = int(choice_str)
+            if 1 <= choice <= len(scraper_display_list):
+                selected_scraper_info = scraper_display_list[choice - 1]
+                break
+            else:
+                print(f"Invalid choice. Please enter a number between 1 and {len(scraper_display_list)}.")
+        except ValueError:
+            print("Invalid input. Please enter a number.")
+        except KeyboardInterrupt:
+            print("\nExiting.")
+            return
     
     if selected_scraper_info:
         SelectedScraperClass = selected_scraper_info['class']
@@ -109,7 +122,7 @@ def main():
             return
 
         search_criteria = {
-            'location': 'Sample City',
+            'location': 'Sample City', # You might want to make this configurable too
             'property_type': 'apartment',
             'min_beds': 2
         }
@@ -121,9 +134,7 @@ def main():
         print(f"\nScraping process completed for {scraper_instance.site_name}.")
         # Optionally, display data from DB or summary stats here
         
-    elif not scraper_display_list:
-        print("No scrapers available to run.")
-    else:
+    else: # Should not be reached if loop for selection works correctly
         print(f"Could not select a scraper to run.")
 
 
