@@ -308,65 +308,85 @@ class AdresowoScraper(BaseScraper):
 
         # Area (m2)
         area_text = 'N/A'
-        
-        # Try to find area in div with "Powierzchnia" text, specifically targeting the structure provided
-        # Example structure: <div role="row">...Powierzchnia<br><span class="offer-summary__value">43</span>,10 m²</div>
-        
-        # Find all divs that might contain "Powierzchnia"
-        potential_area_containers = soup.find_all(lambda tag: tag.name == 'div' and 'Powierzchnia' in tag.get_text())
 
-        for container in potential_area_containers:
-            # Check if this container directly holds the span.offer-summary__value for area
-            area_span = container.find('span', class_='offer-summary__value')
-            if area_span and 'Powierzchnia' in container.find(string=True, recursive=False): # Check if "Powierzchnia" is a direct text child before the span
-                
-                value_part = area_span.get_text(strip=True)
-                unit_part = ''
-                
-                # The unit might be part of the span's next sibling text node
-                # or part of the container's text after the span
-                if area_span.next_sibling and isinstance(area_span.next_sibling, str):
-                    unit_part = area_span.next_sibling.strip()
-                
-                if value_part and unit_part: # e.g., value_part = "43", unit_part = ",10 m²"
-                    # Combine and clean, removing potential extra spaces around comma
-                    combined_area = f"{value_part}{unit_part}".replace(" ", "").replace(",", ".")
-                    # Ensure m² is present and correctly formatted
-                    if 'm²' not in combined_area:
-                         # Attempt to re-add m² if it was lost, or if only number was found
-                        area_match_val = re.search(r'(\d[\d.,]*)', combined_area)
-                        if area_match_val:
-                            area_text = f"{area_match_val.group(1).replace(',', '.')} m²"
-                        else: # Fallback if regex fails
-                            area_text = f"{combined_area} m²" 
-                    else: # If m² is already there, just use it
-                        area_text = combined_area.replace("m2", "m²") # Normalize to m²
-                    break # Found and processed area
+        # Attempt 1: Find divs that contain "Powierzchnia" AND have a direct child span.offer-summary__value
+        potential_area_divs = soup.find_all(
+            lambda tag: tag.name == 'div' and \
+                        'Powierzchnia' in tag.get_text(separator=" ", strip=True) and \
+                        tag.find('span', class_='offer-summary__value', recursive=False)
+        )
 
-            # Fallback for slightly different structures within the container
-            elif area_span: # If span is found but "Powierzchnia" is not a direct child text
-                # This logic is similar to the original, but scoped within a "Powierzchnia" container
-                temp_area_text = area_span.get_text(strip=True)
-                temp_area_unit = ''.join(s.strip() for s in area_span.next_siblings if isinstance(s, str))
-                
-                # Check if the unit is directly after the span
-                if 'm²' in temp_area_unit:
-                    area_text = f"{temp_area_text}{temp_area_unit}".replace(" ", "").replace(",",".")
-                    if 'm²' not in area_text: # Ensure m² is present
-                        area_text = f"{area_text.replace('m2','')} m²" # Add m² if missing
-                    else:
-                        area_text = area_text.replace("m2", "m²")
-                    break 
-                # If unit is not directly after, but value is numeric, assume m²
-                elif re.match(r'^[\d.,\s]+$', temp_area_text):
-                    area_text = f"{temp_area_text.replace(' ','').replace(',','.')} m²"
-                    break
+        # Attempt 2: Fallback if direct child span is too restrictive (e.g. span is nested deeper)
+        if not potential_area_divs:
+            potential_area_divs = soup.find_all(
+                lambda tag: tag.name == 'div' and \
+                            'Powierzchnia' in tag.get_text(separator=" ", strip=True) and \
+                            tag.find('span', class_='offer-summary__value')
+            )
         
-        # Fallback: try to extract from description if not found in dedicated field and still N/A
-        if area_text == 'N/A' and 'description' in details and details['description'] != 'N/A':
-            area_match_desc = re.search(r'(\d+(?:[.,]\d+)?)\s*m[²2]', details['description'])
-            if area_match_desc:
-                area_text = f"{area_match_desc.group(1).replace(',', '.')} m²"
+        for div_container in potential_area_divs:
+            # We assume area_span exists due to the lambda filter, but double check
+            area_span = div_container.find('span', class_='offer-summary__value')
+            if not area_span:
+                continue
+
+            value_part = area_span.get_text(strip=True)
+            unit_part = ''
+            
+            # Try to get unit from the text node immediately following the span
+            if area_span.next_sibling and isinstance(area_span.next_sibling, str):
+                unit_part = area_span.next_sibling.strip()
+
+            # Construct combined_text from value_part and unit_part
+            combined_text = value_part
+            if unit_part:
+                if value_part.endswith(',') and unit_part and unit_part[0].isdigit():
+                    combined_text += unit_part  # e.g. value="123," unit=",45 m²" -> "123,,45 m²" (regex will handle extra comma)
+                elif not any(char.isdigit() for char in unit_part.replace('²','').replace('2','')): # if unit_part is just " m²" or similar
+                     combined_text += " " + unit_part.strip() if not value_part.endswith(" ") else unit_part.strip()
+                else: # general case, e.g. unit_part = ",10 m²" or "10 m²"
+                    combined_text += unit_part
+            combined_text = combined_text.strip()
+
+            # Regex to extract number (possibly with comma/dot) and m²/m2 unit
+            # Removes all spaces before regex for robustness: "43, 10 m²" -> "43,10m²"
+            processed_text_for_regex = combined_text.replace(" ", "")
+            match = re.search(r'(\d[\d.,]*\d|\d)\s*(m²|m2)', processed_text_for_regex)
+            
+            if match:
+                area_value_str = match.group(1).replace(',', '.') # Normalize to dot decimal
+                area_text = f"{area_value_str} m²"
+                break # Found area, exit loop
+
+            # Fallback 1: If unit_part was empty, regex on value_part itself (span might contain "43.10 m²")
+            elif not unit_part:
+                 match_in_value = re.search(r'(\d[\d.,]*\d|\d)\s*(m²|m2)', value_part.replace(" ",""))
+                 if match_in_value:
+                    area_value_str = match_in_value.group(1).replace(',', '.')
+                    area_text = f"{area_value_str} m²"
+                    break # Found area, exit loop
+            
+            # Fallback 2: If value_part is numeric, and unit_part seems to be the unit
+            elif re.match(r'^[\d.,]+$', value_part) and ('m²' in unit_part or 'm2' in unit_part):
+                area_text = f"{value_part.replace(',','.')} m²"
+                break # Found area, exit loop
+            
+            # Fallback 3: If value_part is numeric and unit_part is empty, assume m² (weaker assumption)
+            # This might be hit if the span is just "43" and there's no unit text immediately after.
+            elif re.match(r'^[\d.,]+$', value_part) and not unit_part:
+                # Check if "Powierzchnia" text is very close to this span to increase confidence
+                # For now, if we are in a "Powierzchnia" div, and found a number, it's a good candidate
+                area_text = f"{value_part.replace(',','.')} m²"
+                break # Found potential area
+
+        # Final Fallback: try to extract from description if not found in dedicated field and still N/A
+        if area_text == 'N/A': # Check only if area_text is still 'N/A'
+            # Ensure details['description'] exists and is not 'N/A' before searching
+            description_content = details.get('description')
+            if description_content and description_content != 'N/A':
+                area_match_desc = re.search(r'(\d+(?:[.,]\d+)?)\s*m[²2]', description_content)
+                if area_match_desc:
+                    area_text = f"{area_match_desc.group(1).replace(',', '.')} m²"
 
         details['area_m2'] = area_text.strip() if area_text != 'N/A' else 'N/A'
 
