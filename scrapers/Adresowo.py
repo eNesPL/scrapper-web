@@ -226,22 +226,13 @@ class AdresowoScraper(BaseScraper):
             og_title = soup.find('meta', property='og:title')
             details['title'] = og_title['content'].strip().replace(" | Adresowo.pl", "") if og_title and og_title.get('content') else 'N/A'
         
-        # Price - multiple fallback approaches
+        # Price extraction
         price_text_content = 'N/A'
-        
-        # Try 1: Look for price in div with "Cena" text
-        cena_divs = soup.find_all(lambda tag: tag.name == 'div' and 'Cena' in tag.text)
-        for div in cena_divs:
-            price_span = div.find('span', class_='offer-summary__value')
-            if price_span:
-                price_text = price_span.get_text(strip=True).replace('\xa0', ' ')
-                currency_text = ''.join(price_span.find_next_siblings(string=True))
-                if price_text and any(c.isdigit() for c in price_text):
-                    if 'zł' in currency_text and 'zł' not in price_text:
-                        price_text_content = f"{price_text} zł"
-                    else:
-                        price_text_content = price_text
-                    break
+        price_header = soup.find('div', string='Cena')
+        if price_header:
+            price_div = price_header.find_next_sibling('div')
+            if price_div:
+                price_text_content = price_div.get_text(strip=True).replace('\xa0', ' ')
                     
         # Try 2: Look for price in banners or section headers if first approach failed
         if price_text_content == 'N/A':
@@ -300,21 +291,11 @@ class AdresowoScraper(BaseScraper):
 
         # Area (m2)
         area_text = 'N/A'
-
-        # Attempt 1: Find divs that contain "Powierzchnia" AND have a direct child span.offer-summary__value
-        potential_area_divs = soup.find_all(
-            lambda tag: tag.name == 'div' and \
-                        'Powierzchnia' in tag.get_text(separator=" ", strip=True) and \
-                        tag.find('span', class_='offer-summary__value', recursive=False)
-        )
-
-        # Attempt 2: Fallback if direct child span is too restrictive (e.g. span is nested deeper)
-        if not potential_area_divs:
-            potential_area_divs = soup.find_all(
-                lambda tag: tag.name == 'div' and \
-                            'Powierzchnia' in tag.get_text(separator=" ", strip=True) and \
-                            tag.find('span', class_='offer-summary__value')
-            )
+        area_header = soup.find('div', string='Powierzchnia')
+        if area_header:
+            area_div = area_header.find_next_sibling('div')
+            if area_div:
+                area_text = area_div.get_text(strip=True)
         
         for div_container in potential_area_divs:
             # We assume area_span exists due to the lambda filter, but double check
@@ -383,17 +364,14 @@ class AdresowoScraper(BaseScraper):
         details['area_m2'] = area_text.strip() if area_text != 'N/A' else 'N/A'
 
         # Description
-        description_tag = soup.select_one('div.description[itemprop="description"], section#description div.text') # Added alternative selector
+        description_tag = soup.find('div', class_='description')
         if description_tag:
-            # Remove "Zobacz więcej" or similar buttons/links from description
-            for unwanted_tag in description_tag.select('button, a.showMore'):
-                unwanted_tag.decompose()
-                
-            p_tags = description_tag.find_all('p')
-            if p_tags:
-                description_text = "\n".join(p.get_text(strip=True) for p in p_tags if p.get_text(strip=True))
-            else: # Fallback to all text in the div if no <p> tags
-                description_text = description_tag.get_text(separator="\n", strip=True)
+            # Remove empty lines and join with newlines
+            description_text = '\n'.join(
+                line.strip() 
+                for line in description_tag.stripped_strings 
+                if line.strip()
+            )
             details['description'] = description_text
         else:
             details['description'] = 'N/A'
