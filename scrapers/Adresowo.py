@@ -115,7 +115,7 @@ class AdresowoScraper(BaseScraper):
 
             price = 'N/A'
             # Selectors for price might need adjustment
-            price_tag = section.select_one('div.price-container p.price, p.offer-price, p.price strong') 
+            price_tag = section.select_one('.offer-summary__value')
             if price_tag:
                 price_text = price_tag.get_text(strip=True)
                 price = price_text.replace('\xa0', ' ') 
@@ -234,7 +234,7 @@ class AdresowoScraper(BaseScraper):
                 image_count = len(gallery_thumbnails)
             else:
                 # Fallback: count <img> tags in a general gallery section or main image
-                gallery_images = soup.select('div.gallery img, div.photoList img, section.gallery img, div[itemprop="image"] img, figure.photoview img')
+                gallery_images = soup.select('img')
                 if gallery_images:
                     image_count = len(gallery_images)
         
