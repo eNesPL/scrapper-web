@@ -228,11 +228,16 @@ class AdresowoScraper(BaseScraper):
         
         # Price extraction
         price_text_content = 'N/A'
-        price_header = soup.find('div', string='Cena')
-        if price_header:
-            price_div = price_header.find_next_sibling('div')
-            if price_div:
-                price_text_content = price_div.get_text(strip=True).replace('\xa0', ' ')
+        # Szukaj diva z klasą offer-summary__item1 zawierającego "Cena"
+        price_container = soup.find('div', class_='offer-summary__item1')
+        if price_container:
+            # Znajdź span z ceną w kontenerze
+            price_span = price_container.find('span', class_='offer-summary__value')
+            if price_span:
+                # Pobierz tekst i następujący bezpośrednio po spanie tekst "zł"
+                price_value = price_span.get_text(strip=True)
+                currency = price_span.next_sibling.strip() if price_span.next_sibling else 'zł'
+                price_text_content = f"{price_value} {currency}"
                     
         # Try 2: Look for price in banners or section headers if first approach failed
         if price_text_content == 'N/A':
