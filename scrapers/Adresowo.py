@@ -6,6 +6,11 @@ from .base_scraper import BaseScraper
 class AdresowoScraper(BaseScraper):
     """
     Scraper for Adresowo.pl real estate listings.
+    Note: Adresowo.pl may have cookie consent banners or other mechanisms
+    that can alter the HTML content received by simple `requests.get()`.
+    If parsing fails, especially for price/images, this might be the cause.
+    Consider using a session object to handle cookies or a browser automation
+    tool like Selenium if issues persist.
     """
 
     def __init__(self, db_manager=None, notification_manager=None):
@@ -27,8 +32,13 @@ class AdresowoScraper(BaseScraper):
         try:
             # Standard headers to mimic a browser visit, can be expanded if needed
             headers = {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+                'Accept-Language': 'en-US,en;q=0.9,pl;q=0.8', # Added accept-language
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8',
             }
+            # Using a session might help with cookie persistence if the site requires it
+            # s = requests.Session()
+            # response = s.get(self.hardcoded_listings_url, headers=headers, timeout=15)
             response = requests.get(self.hardcoded_listings_url, headers=headers, timeout=15)
             response.raise_for_status()  # Raise an exception for HTTP errors
             return response.text
@@ -127,7 +137,9 @@ class AdresowoScraper(BaseScraper):
         print(f"[{self.site_name}] Fetching details for URL: {listing_url}")
         try:
             headers = {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+                'Accept-Language': 'en-US,en;q=0.9,pl;q=0.8',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8',
             }
             response = requests.get(listing_url, headers=headers, timeout=15)
             response.raise_for_status()
@@ -149,29 +161,43 @@ class AdresowoScraper(BaseScraper):
         details = {}
 
         # Title
-        title_tag = soup.select_one('header.offerHeader h1, h1[itemprop="name"]')
+        title_tag = soup.select_one('header.offerHeader h1[itemprop="name"], h1[itemprop="name"]') # More specific for h1 in header first
         if title_tag:
             details['title'] = title_tag.get_text(strip=True)
         else: # Fallback to OpenGraph title
             og_title = soup.find('meta', property='og:title')
-            details['title'] = og_title['content'].strip() if og_title and og_title.get('content') else 'N/A'
+            details['title'] = og_title['content'].strip().replace(" | Adresowo.pl", "") if og_title and og_title.get('content') else 'N/A'
         
         # Price
-        price_tag = soup.select_one('aside[role="complementary"] p.price strong, div.priceBox p.price strong')
-        if price_tag:
-            price_text = price_tag.get_text(strip=True)
-            details['price'] = price_text.replace('\xa0', ' ') # Normalize non-breaking space
-        else: # Fallback if the primary selector fails
-            price_tag_fallback = soup.select_one('p.price strong') # A more generic one
-            if price_tag_fallback:
-                 price_text = price_tag_fallback.get_text(strip=True)
-                 details['price'] = price_text.replace('\xa0', ' ')
+        price_text_content = 'N/A'
+        # Primary selector based on live page structure for the example URL
+        price_container = soup.select_one('aside[role="complementary"] p.price, div.priceBox p.price')
+        if price_container:
+            strong_tag = price_container.find('strong')
+            if strong_tag:
+                price_text_content = strong_tag.get_text(strip=True)
             else:
-                details['price'] = 'N/A'
+                price_text_content = price_container.get_text(strip=True) # Fallback to p's text if strong is missing
+        else:
+            # Broader fallback if the main aside/div.priceBox structure isn't found
+            price_tag_fallback = soup.select_one('p.price') # Generic p.price
+            if price_tag_fallback:
+                strong_tag = price_tag_fallback.find('strong')
+                if strong_tag:
+                    price_text_content = strong_tag.get_text(strip=True)
+                else:
+                    price_text_content = price_tag_fallback.get_text(strip=True)
+        
+        details['price'] = price_text_content.replace('\xa0', ' ') if price_text_content != 'N/A' else 'N/A'
+
 
         # Description
-        description_tag = soup.select_one('div.description[itemprop="description"]')
+        description_tag = soup.select_one('div.description[itemprop="description"], section#description div.text') # Added alternative selector
         if description_tag:
+            # Remove "Zobacz więcej" or similar buttons/links from description
+            for unwanted_tag in description_tag.select('button, a.showMore'):
+                unwanted_tag.decompose()
+                
             p_tags = description_tag.find_all('p')
             if p_tags:
                 description_text = "\n".join(p.get_text(strip=True) for p in p_tags if p.get_text(strip=True))
@@ -183,31 +209,34 @@ class AdresowoScraper(BaseScraper):
             
         # Image Count
         image_count = 0
-        photo_count_element = soup.select_one('div.photoCount, span.photo-count-format, span.photos-count') # Common patterns for a counter
+        # Try to get count from a specific element like "1 / 14" or "14 zdjęć"
+        photo_count_element = soup.select_one('div.photoCount, span.photo-count-format, span.photos-count, div.gallery-counter')
         if photo_count_element:
             count_text = photo_count_element.get_text(strip=True)
-            # Try to parse "X / Y" or just "Y"
+            # Try to parse "X / Y" or just "Y" or "Y zdjęć"
             match_xy = re.search(r'(\d+)\s*/\s*(\d+)', count_text) # "X / Y"
-            match_y = re.search(r'(\d+)', count_text) # Just "Y"
+            match_y_total = re.search(r'/s*(\d+)', count_text) # "/ Y" (total from X/Y)
+            match_y_standalone = re.search(r'^(\d+)', count_text) # "Y" or "Y xxx" (count at the beginning)
+            
             if match_xy:
-                image_count = int(match_xy.group(2)) # Total count
-            elif match_y:
-                image_count = int(match_y.group(1)) # The number found
+                image_count = int(match_xy.group(2)) # Total count from "X / Y"
+            elif match_y_total:
+                image_count = int(match_y_total.group(1))
+            elif match_y_standalone:
+                image_count = int(match_y_standalone.group(1)) # The number found
         
         if image_count == 0:
-            # Fallback: Count <li> items in the photo list (thumbnails)
-            gallery_list_items = soup.select('div#photoList ul li, ul.photo-thumbs li')
-            if gallery_list_items:
-                image_count = len(gallery_list_items)
+            # Fallback: Count <img> items in the photo gallery thumbnails or main image area
+            gallery_thumbnails = soup.select('div#photoList ul li, ul.photo-thumbs li, div.gallery-thumbnails-list li')
+            if gallery_thumbnails:
+                image_count = len(gallery_thumbnails)
             else:
-                # Fallback: count <img> tags in a general gallery section
-                gallery_images = soup.select('div.gallery img, div.photoList img, section.gallery img, div[itemprop="image"] img')
+                # Fallback: count <img> tags in a general gallery section or main image
+                gallery_images = soup.select('div.gallery img, div.photoList img, section.gallery img, div[itemprop="image"] img, figure.photoview img')
                 if gallery_images:
                     image_count = len(gallery_images)
         
         details['image_count'] = image_count
         
-        # The BaseScraper will handle setting defaults for missing fields.
-        # This scraper just returns what it found.
         print(f"[{self.site_name}] Parsed details: Title='{details.get('title', 'N/A')[:30]}...', Price='{details.get('price', 'N/A')}', ImgCount={details.get('image_count', 0)}")
         return details
