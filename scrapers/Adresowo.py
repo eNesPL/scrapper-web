@@ -39,6 +39,8 @@ class AdresowoScraper(BaseScraper):
     def parse_listings(self, html_content):
         """
         Parses the listings page HTML to extract individual listing URLs or summary data.
+        It collects sections with class 'search-results__block' until a section
+        with class 'search-block-similar' is found.
         :param html_content: str, HTML content of the listings page.
         :return: List of dictionaries, each with at least a 'url', 'title', and 'price'.
         """
@@ -49,16 +51,28 @@ class AdresowoScraper(BaseScraper):
         soup = BeautifulSoup(html_content, 'html.parser')
         listings = []
         
-        # Listings are typically in <section class="row offerIGrid ..."> elements
-        # or similar sections having 'data-item-id'
-        listing_sections = soup.find_all('section', class_=lambda x: x and 'offerIGrid' in x.split())
+        # Find all <section> elements. We will iterate through them.
+        all_section_tags = soup.find_all('section')
+        
+        print(f"[{self.site_name}] Found {len(all_section_tags)} total <section> tags to inspect.")
 
-        print(f"[{self.site_name}] Found {len(listing_sections)} potential listing sections on the page.")
+        collected_listing_sections = []
+        for section_tag in all_section_tags:
+            current_classes = section_tag.get('class', [])
+            
+            if 'search-block-similar' in current_classes:
+                print(f"[{self.site_name}] Encountered 'search-block-similar', stopping collection of listing sections.")
+                break  # Stop processing further sections
+            
+            if 'search-results__block' in current_classes:
+                collected_listing_sections.append(section_tag)
+        
+        print(f"[{self.site_name}] Identified {len(collected_listing_sections)} sections with class 'search-results__block' before 'search-block-similar'.")
 
-        for section in listing_sections:
+        for section in collected_listing_sections:
             url_suffix = section.get('data-href')
             if not url_suffix:
-                # Fallback: try to find an <a> tag with the link
+                # Fallback: try to find an <a> tag with the link within the section
                 link_tag = section.find('a', href=re.compile(r'^/o/'))
                 if link_tag:
                     url_suffix = link_tag.get('href')
@@ -70,32 +84,30 @@ class AdresowoScraper(BaseScraper):
             full_url = self.base_url + url_suffix
 
             title = 'N/A'
-            title_tag_h2 = section.select_one('div.title-container a.title h2, div.title-container h2.title a, h2.offer-title a') # Common patterns for title
+            # Selectors for title might need adjustment based on the internal structure of 'search-results__block'
+            title_tag_h2 = section.select_one('div.title-container a.title h2, div.title-container h2.title a, h2.offer-title a, a.title h2') 
             if title_tag_h2:
                 title = title_tag_h2.get_text(strip=True)
-            else: # Fallback to a.title attribute or text
-                title_link_tag = section.select_one('a.title, a.isFavouriteEnabled') # These often have title attributes or text
+            else: 
+                title_link_tag = section.select_one('a.title, a.isFavouriteEnabled') 
                 if title_link_tag:
                     title_attr = title_link_tag.get('title', '').strip()
                     if title_attr:
                         title = title_attr
-                    else: # If title attribute is empty, try its direct text
+                    else: 
                         title = title_link_tag.get_text(strip=True)
-                        if not title: # If text is also empty, check h2 inside this link
+                        if not title: 
                            h2_inside = title_link_tag.find('h2')
                            if h2_inside: title = h2_inside.get_text(strip=True)
 
 
             price = 'N/A'
-            price_tag = section.select_one('div.price-container p.price, p.offer-price') # Common patterns for price
+            # Selectors for price might need adjustment
+            price_tag = section.select_one('div.price-container p.price, p.offer-price, p.price strong') 
             if price_tag:
                 price_text = price_tag.get_text(strip=True)
-                price = price_text.replace('\xa0', ' ') # Replace non-breaking space
+                price = price_text.replace('\xa0', ' ') 
             
-            if title == 'N/A' and price == 'N/A' and full_url == self.base_url + url_suffix : # Likely not a valid listing item if all are default
-                 # print(f"[{self.site_name}] Skipping section, seems invalid (URL: {full_url}, Title: {title}, Price: {price})")
-                 pass # Allow it for now, maybe details page has info
-
             listing_data = {
                 'url': full_url,
                 'title': title,
@@ -103,7 +115,7 @@ class AdresowoScraper(BaseScraper):
             }
             listings.append(listing_data)
             
-        print(f"[{self.site_name}] Parsed {len(listings)} listings from page.")
+        print(f"[{self.site_name}] Parsed {len(listings)} listings from page based on new criteria.")
         return listings
 
     def fetch_listing_details_page(self, listing_url):
