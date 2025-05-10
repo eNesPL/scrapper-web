@@ -31,6 +31,9 @@
         {% for listing in listings %}
         <div class="listing">
             <h2><a href="{{ listing.url }}" target="_blank">{{ listing.title }}</a></h2>
+            {% if listing.first_image_url %}
+            <img src="{{ listing.first_image_url }}" style="max-width: 300px; max-height: 200px; margin-bottom: 10px;">
+            {% endif %}
             <div class="price">{{ listing.price }}</div>
             <div class="meta">
                 <span>Area: {{ listing.area_m2 or 'N/A' }}</span> | 
