@@ -139,22 +139,14 @@ class AdresowoScraper(BaseScraper):
 
                 # Try to extract Area (m2)
                 if 'Powierzchnia' in div_full_text:
-                    area_span = row_div.find('span', class_='offer-summary__value')
-                    if area_span:
-                        # Get all text including siblings that might contain units
-                        area_text = area_span.get_text(strip=True)
-                        siblings_text = ''.join(s.strip() for s in area_span.next_siblings if isinstance(s, str))
-                        full_area_text = f"{area_text}{siblings_text}"
-                        
-                        # Try to extract area value with potential decimal point/comma
-                        area_match = re.search(r'(\d[\d\s]*(?:[.,]\d+)?)\s*(?:m²|m2|m\W*2)?', full_area_text)
-                        if area_match:
-                            area_m2 = f"{area_match.group(1).replace(',', '.').replace(' ', '')} m²"
-                        # Fallback to just the span text if extraction fails
-                        elif area_text:
-                            area_m2 = f"{area_text} m²"
-                        else:
-                            area_m2 = 'N/A'
+                    # Nowe podejście do parsowania z uwzględnieniem pełnego tekstu
+                    full_text = ' '.join(row_div.stripped_strings)
+                    area_match = re.search(r'Powierzchnia.*?(\d+[\.,]?\d*)\s*(m²|m2)', full_text, re.IGNORECASE)
+                    if area_match:
+                        area_value = area_match.group(1).replace(',', '.')
+                        area_m2 = f"{area_value} {area_match.group(2)}"
+                    else:
+                        area_m2 = 'N/A'
             
             # Extract first image URL if available
             first_image_url = None
