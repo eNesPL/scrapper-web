@@ -125,14 +125,17 @@ class AdresowoScraper(BaseScraper):
                 if 'Cena' in div_full_text:
                     price_span = row_div.find('span', class_='offer-summary__value')
                     if price_span:
-                        price_text_content = price_span.get_text(strip=True)
-                        # Look at previous siblings for currency (zł)
-                        currency_text = ''.join(row_div.find(string='Cena').parent.find_next_siblings(string=True))
-                        if any(char.isdigit() for char in price_text_content):
-                            price = price_text_content.replace('\xa0', ' ').strip()
-                            # Check if we need to append currency from siblings
-                            if 'zł' in currency_text and 'zł' not in price:
-                                price += ' zł'
+                        price_text = price_span.get_text(strip=True)
+                        # Find the parent div and get all text after price span
+                        price_and_currency = ''
+                        for sibling in price_span.next_siblings:
+                            if isinstance(sibling, str):
+                                price_and_currency += sibling.strip()
+                        # If price is digits-only and currency is separate
+                        if price_text.replace(' ', '').isdigit() and 'zł' in price_and_currency:
+                            price = f"{price_text.strip()} zł"
+                        else:
+                            price = price_text.replace('\xa0', ' ').strip()
 
                 # Try to extract Area (m2)
                 if 'Powierzchnia' in div_full_text:
@@ -220,14 +223,16 @@ class AdresowoScraper(BaseScraper):
             details['title'] = og_title['content'].strip().replace(" | Adresowo.pl", "") if og_title and og_title.get('content') else 'N/A'
         
         # Price - check offer-summary first which is used on listing pages
-        price_text_content = 'N/A' # Default
-        summary_price = soup.select_one('div[role="rowgroup"] > div[role="row"]:has(> i:contains("Cena")) span.offer-summary__value')
-        if summary_price and summary_price.get_text(strip=True):
-            price_text_content = summary_price.get_text(strip=True)
-            # Get the currency from sibling text
-            currency_text = ''.join(summary_price.find_next_siblings(string=True)) or ''
-            if 'zł' in currency_text and 'zł' not in price_text_content:
-                price_text_content += ' zł'
+        price_text = 'N/A'
+        price_row = soup.select_one('div[role="row"]:has(> i:contains("Cena"))')
+        if price_row:
+            price_span = price_row.find('span', class_='offer-summary__value')
+            if price_span:
+                price_text = price_span.get_text(strip=True)
+                # Get full price row text to check for currency
+                full_row_text = ' '.join(price_row.stripped_strings)
+                if price_text.replace(' ', '').isdigit() and 'zł' in full_row_text:
+                    price_text = f"{price_text} zł"
         else:
             # Fallback to other selectors
             price_container = soup.select_one('aside[role="complementary"] p.price, div.priceBox p.price')
