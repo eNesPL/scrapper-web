@@ -23,8 +23,10 @@ def get_listings_from_db():
         try:
             raw_data = json.loads(listing['raw_data'])
             listing['area_m2'] = raw_data.get('area_m2', 'N/A')
+            listing['price'] = raw_data.get('price', 'N/A')  # Dodano nowe pole
         except (json.JSONDecodeError, KeyError) as e:
             listing['area_m2'] = 'N/A'
+            listing['price'] = 'N/A'  # Domyślna wartość dla ceny
         listings.append(listing)
     
     return listings
