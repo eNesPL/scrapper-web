@@ -23,6 +23,7 @@ class DatabaseManager:
             price TEXT,
             description TEXT,
             image_count INTEGER,
+            first_image_url TEXT,
             raw_data TEXT, -- Store all scraped data as JSON
             first_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
