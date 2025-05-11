@@ -221,20 +221,34 @@ class LentoScraper(BaseScraper):
         }
 
         # Title
-        title_tag = soup.find('div', class_='title') # Common container for title
-        if title_tag:
-            h2_title = title_tag.find('h2')
-            if h2_title:
-                details['title'] = h2_title.get_text(strip=True)
-        if details['title'] == 'N/A': # Fallback to main h1 or h2 if specific title structure not found
-            h1_tag = soup.find('h1')
-            if h1_tag:
-                details['title'] = h1_tag.get_text(strip=True)
-            else:
-                h2_fallback = soup.find('h2') # General h2
-                if h2_fallback:
-                     details['title'] = h2_fallback.get_text(strip=True)
-        print(f"[{self.site_name}] Title: {details['title']}")
+        if lxml_html and html_content: # Ensure lxml is available and html_content is not None
+            try:
+                tree = lxml_html.fromstring(html_content)
+                title_elements = tree.xpath('/html/body/main/div[2]/div[2]/div/div/div[1]/div[1]/h2')
+                if title_elements:
+                    details['title'] = title_elements[0].text_content().strip()
+                    print(f"[{self.site_name}] Title (XPath): {details['title']}")
+            except Exception as e:
+                print(f"[{self.site_name}] Error extracting title with XPath: {e}. Falling back to BeautifulSoup.")
+        
+        if details['title'] == 'N/A': # Fallback to BeautifulSoup if XPath failed or lxml not available
+            title_tag_bs = soup.find('div', class_='title') # Common container for title
+            if title_tag_bs:
+                h2_title_bs = title_tag_bs.find('h2')
+                if h2_title_bs:
+                    details['title'] = h2_title_bs.get_text(strip=True)
+            if details['title'] == 'N/A': # Further fallback
+                h1_tag_bs = soup.find('h1')
+                if h1_tag_bs:
+                    details['title'] = h1_tag_bs.get_text(strip=True)
+                else:
+                    h2_fallback_bs = soup.find('h2') # General h2
+                    if h2_fallback_bs:
+                         details['title'] = h2_fallback_bs.get_text(strip=True)
+            print(f"[{self.site_name}] Title (BeautifulSoup fallback): {details['title']}")
+        else: # If title was found by XPath
+             print(f"[{self.site_name}] Title successfully extracted by XPath: {details['title']}")
+
 
         # Price
         price_div = soup.find('div', class_='price') # Main price display
