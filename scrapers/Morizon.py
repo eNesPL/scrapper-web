@@ -278,6 +278,11 @@ class MorizonScraper(BaseScraper):
         for fonerk_div in fonerk_divs:
             section_title_tag = fonerk_div.find('h3', class_='gHM061')
             section_title = section_title_tag.get_text(strip=True) if section_title_tag else "Szczegóły"
+
+            # Skip "Ogłoszenie" section from being added to the description
+            if section_title.lower() == "ogłoszenie":
+                print(f"[{self.site_name}] Skipping section '{section_title}' from description.")
+                continue
             
             current_section_details = [f"\n{section_title}:"] # Start with the section title
             
@@ -341,9 +346,26 @@ class MorizonScraper(BaseScraper):
         print(f"[{self.site_name}] Image count: {details['image_count']}")
 
         # First Image URL
-        main_image_gallery = soup.find('div', class_=['summary__gallery', 'image-gallery__item--main', 'summary__photos-main'])
-        if main_image_gallery:
-            img_tag = main_image_gallery.find('img')
+        # Try more specific selectors first for the main image
+        # XPath /html/body/div[1]/div[2]/main/div[1]/div[3]/div[1]/button[1] points to a button, not an image.
+        # We will use BeautifulSoup to find the actual main image.
+        
+        # Common Morizon structure for main image:
+        # 1. Inside a div with class 'summary__gallery' or 'summary__photos-main'
+        # 2. The image itself might be in 'image-gallery__item--main' or directly as an img
+        
+        # Attempt 1: More specific gallery containers
+        main_photo_container = soup.find('div', class_='summary__gallery')
+        if not main_photo_container:
+            main_photo_container = soup.find('div', class_='summary__photos-main')
+        if not main_photo_container: # Another common pattern for the main image wrapper
+            main_photo_container = soup.find('div', class_='image-gallery__item--main')
+        if not main_photo_container: # A more generic one if others fail
+            main_photo_container = soup.find('div', class_='galleryPhotos__photo')
+
+
+        if main_photo_container:
+            img_tag = main_photo_container.find('img')
             if img_tag:
                 img_src = img_tag.get('data-src') or img_tag.get('src')
                 if img_src:
@@ -353,7 +375,36 @@ class MorizonScraper(BaseScraper):
                         details['first_image_url'] = f"{self.base_url}{img_src if img_src.startswith('/') else '/' + img_src}"
                     else:
                         details['first_image_url'] = img_src
-        print(f"[{self.site_name}] First image URL: {details['first_image_url']}")
+        
+        if details['first_image_url']:
+            print(f"[{self.site_name}] First image URL (found in specific container): {details['first_image_url']}")
+        else:
+            # Fallback: Try to find any prominent image if specific containers fail
+            # This is less reliable but can be a last resort.
+            # Look for an image within an element that might be a main image wrapper
+            # e.g., a div with class 'photo' or 'image' or an article tag
+            print(f"[{self.site_name}] First image not found in specific containers, trying broader search.")
+            # The previous generic find was: soup.find('div', class_=['summary__gallery', 'image-gallery__item--main', 'summary__photos-main'])
+            # Let's try a slightly different approach for fallback: find first img in common content areas
+            content_areas_for_img = soup.find_all(['section', 'article', 'div'], class_=['summary', 'content', 'listingDetails'], limit=3)
+            for area in content_areas_for_img:
+                img_tag = area.find('img')
+                if img_tag:
+                    img_src = img_tag.get('data-src') or img_tag.get('src')
+                    if img_src and not img_src.startswith('data:image'): # Avoid base64 images
+                        if img_src.startswith('//'):
+                            details['first_image_url'] = f"https:{img_src}"
+                        elif not img_src.startswith('http'):
+                            details['first_image_url'] = f"{self.base_url}{img_src if img_src.startswith('/') else '/' + img_src}"
+                        else:
+                            details['first_image_url'] = img_src
+                        
+                        if details['first_image_url']:
+                            print(f"[{self.site_name}] First image URL (found in fallback area): {details['first_image_url']}")
+                            break # Found one
+            if not details['first_image_url']:
+                 print(f"[{self.site_name}] First image URL still not found after fallbacks.")
+
 
         # Ensure essential fields are not None
         details.setdefault('title', 'N/A')
