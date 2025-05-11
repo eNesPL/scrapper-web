@@ -190,6 +190,34 @@ class GratkaScraper(BaseScraper):
                     print(f"[{self.site_name}] Floor info (XPath): {floor_info_for_description}")
             except Exception as e:
                 print(f"[{self.site_name}] Error extracting floor with XPath: {e}")
+
+            # First image URL using XPath to the button
+            try:
+                # XPath points to a button, image might be inside or as background
+                button_elements = lxml_tree.xpath('/html/body/div[1]/div[2]/main/div[1]/div[3]/div[1]/button[1]')
+                if button_elements:
+                    button_element = button_elements[0]
+                    # Try to find an <img> tag inside the button
+                    img_tag_in_button = button_element.find('.//img') # .// searches descendants
+                    if img_tag_in_button is not None and img_tag_in_button.get('src'):
+                        details['first_image_url'] = img_tag_in_button.get('src')
+                        print(f"[{self.site_name}] First image URL (XPath - img in button): {details['first_image_url']}")
+                    else:
+                        # Try to get from style attribute if it's a background image
+                        style_attr = button_element.get('style')
+                        if style_attr and 'background-image' in style_attr:
+                            import re
+                            match = re.search(r"url\(['\"]?(.*?)['\"]?\)", style_attr)
+                            if match:
+                                details['first_image_url'] = match.group(1)
+                                print(f"[{self.site_name}] First image URL (XPath - button style): {details['first_image_url']}")
+                if details.get('first_image_url') and details['first_image_url'].startswith('//'):
+                    details['first_image_url'] = f"https:{details['first_image_url']}"
+                elif details.get('first_image_url') and not details['first_image_url'].startswith('http'):
+                     details['first_image_url'] = f"{self.base_url}{details['first_image_url'] if details['first_image_url'].startswith('/') else '/' + details['first_image_url']}"
+
+            except Exception as e:
+                print(f"[{self.site_name}] Error extracting first image with XPath: {e}")
         else:
             print(f"[{self.site_name}] lxml not available or HTML parsing failed, skipping XPath extractions.")
 
