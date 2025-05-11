@@ -343,39 +343,70 @@ class DomiportaScraper(BaseScraper):
             else:
                 print(f"[{self.site_name}] Description element with generic class 'description' not found.")
 
-        # Attempt to extract "Informacje dodatkowe"
-        additional_info_text = None
-        additional_info_container = soup.find('div', class_='features__container features__list-feature')
-        if additional_info_container:
-            dt_tag = additional_info_container.find('dt', class_='features__item_name', string=lambda t: t and 'Informacje dodatkowe' in t.strip())
-            if dt_tag:
-                dd_tag = dt_tag.find_next_sibling('dd', class_='features__item_value')
-                if dd_tag:
-                    additional_info_text = dd_tag.get_text(strip=True)
-                    if additional_info_text:
-                        print(f"[{self.site_name}] Found 'Informacje dodatkowe': {additional_info_text}")
-                    else:
-                        print(f"[{self.site_name}] 'Informacje dodatkowe' dd tag found, but no text content.")
-                else:
-                    print(f"[{self.site_name}] 'Informacje dodatkowe' dt tag found, but no corresponding dd tag.")
-            else:
-                print(f"[{self.site_name}] 'Informacje dodatkowe' dt tag not found in features__list-feature container.")
-        else:
-            print(f"[{self.site_name}] Container 'features__container features__list-feature' for additional info not found.")
+        # Extract all features from all 'features__container' divs
+        all_features_list = []
+        features_containers = soup.find_all('div', class_='features__container')
+        print(f"[{self.site_name}] Found {len(features_containers)} 'features__container' divs for detailed features.")
 
-        # Combine extracted description with additional info
+        for i, container in enumerate(features_containers):
+            print(f"[{self.site_name}] Processing features_container #{i+1}")
+            # Try to get features from <ul><li> structure
+            ul_element = container.find('ul', class_='features__list-2') # Specific to one type of container
+            if not ul_element: # More generic ul search if the specific one is not found
+                ul_element = container.find('ul')
+
+            if ul_element:
+                list_items = ul_element.find_all('li', recursive=False)
+                print(f"[{self.site_name}] Container #{i+1} (ul): Found {len(list_items)} li elements.")
+                for li_item in list_items:
+                    name_tag = li_item.find('span', class_='features__item_name')
+                    value_tag = li_item.find('span', class_='features__item_value')
+                    if name_tag and value_tag:
+                        name = name_tag.get_text(strip=True)
+                        value = value_tag.get_text(strip=True)
+                        if name and value: # Ensure both name and value have content
+                            feature_string = f"{name}: {value}"
+                            if feature_string not in all_features_list: # Avoid duplicates
+                                all_features_list.append(feature_string)
+                                print(f"[{self.site_name}] Added feature (ul>li): {feature_string}")
+            
+            # Try to get features from <dl><dt><dd> structure
+            dl_element = container.find('dl')
+            if dl_element:
+                dt_tags = dl_element.find_all('dt', recursive=False)
+                print(f"[{self.site_name}] Container #{i+1} (dl): Found {len(dt_tags)} dt elements.")
+                for dt_tag in dt_tags:
+                    dd_tag = dt_tag.find_next_sibling('dd') # Assuming dd is always a sibling
+                    if dd_tag:
+                        name = dt_tag.get_text(strip=True).replace(':', '') # Clean name
+                        value = dd_tag.get_text(strip=True)
+                        if name and value: # Ensure both name and value have content
+                            feature_string = f"{name}: {value}"
+                            if feature_string not in all_features_list: # Avoid duplicates
+                                all_features_list.append(feature_string)
+                                print(f"[{self.site_name}] Added feature (dl>dt): {feature_string}")
+            
+            if not ul_element and not dl_element:
+                 print(f"[{self.site_name}] Container #{i+1}: No ul or dl found for feature extraction in this specific container.")
+
+
+        # Combine main description (if any) with all extracted features
         final_description_parts = []
         if extracted_description_text and extracted_description_text.strip():
             final_description_parts.append(extracted_description_text)
         
-        if additional_info_text and additional_info_text.strip():
-            if final_description_parts: # If there was a main description, add a separator
-                final_description_parts.append("\n\nInformacje dodatkowe:\n" + additional_info_text)
-            else: # If no main description, additional info becomes the description
-                final_description_parts.append("Informacje dodatkowe:\n" + additional_info_text)
+        if all_features_list:
+            # Join all collected features into a single string, separated by newlines
+            features_section_string = "\n".join(all_features_list)
+            
+            if final_description_parts: # If there was a main description, add a separator and then features
+                final_description_parts.append("\n\nSzczegóły oferty:\n" + features_section_string)
+            else: # If no main description, features become the description (with a title)
+                # Remove leading newlines from features_section_string if it's the only content
+                final_description_parts.append("Szczegóły oferty:\n" + features_section_string)
 
         if final_description_parts:
-            full_description = "\n".join(final_description_parts)
+            full_description = "\n".join(filter(None, final_description_parts)) # Ensure no empty strings from list join
             details['description'] = full_description[:1000] + '...' if len(full_description) > 1000 else full_description
         
         # Log final description status
