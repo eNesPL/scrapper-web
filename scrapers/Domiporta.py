@@ -152,12 +152,14 @@ class DomiportaScraper(BaseScraper):
                 area_text = extracted_value
 
         if area_text is None:
-            # Try new format if 'features-short__value-quadric' not found or was empty
-            area_name_span = soup.find('span', class_='features__item_name', string='Powierzchnia całkowita')
-            if area_name_span:
-                area_value_span = area_name_span.find_next_sibling('span', class_='features__item_value')
-                if area_value_span:
-                    extracted_value = area_value_span.get_text(strip=True).replace('\xa0', ' ')
+            # Try table format if 'features-short__value-quadric' (or other prior methods) not found or was empty
+            # Look for the <td> tag with "Powierzchnia całkowita"
+            area_name_td = soup.find('td', class_='features__item_name', string=lambda t: t and 'Powierzchnia całkowita' in t.strip())
+            if area_name_td:
+                # The value is in the next <td> sibling with class 'features__item_value'
+                area_value_td = area_name_td.find_next_sibling('td', class_='features__item_value')
+                if area_value_td:
+                    extracted_value = area_value_td.get_text(strip=True).replace('\xa0', ' ')
                     if extracted_value:  # Only use if non-empty
                         area_text = extracted_value
         
