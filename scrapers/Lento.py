@@ -288,131 +288,119 @@ class LentoScraper(BaseScraper):
             print(f"[{self.site_name}] Price successfully extracted by XPath: {details['price']}")
 
 
-        # Description and other details from "Szczegóły ogłoszenia" and "Opis oferty"
-        description_parts = []
-        
-        # "Szczegóły ogłoszenia" - including Area extraction via XPath first
+        # Description - new approach using specified XPath
+        description_text_from_xpath = None
         if lxml_html and html_content:
             try:
-                if 'tree' not in locals() or tree is None:
+                if 'tree' not in locals() or tree is None: # Ensure tree is parsed
                     tree = lxml_html.fromstring(html_content)
+                
+                # XPath provided by user for the main description container
+                description_container_xpath = '/html/body/main/div[2]/div[2]/div/div/div[1]/div[1]/div[9]'
+                description_elements = tree.xpath(description_container_xpath)
+
+                if description_elements:
+                    print(f"[{self.site_name}] DEBUG: Found description container with XPath: {description_container_xpath}")
+                    container_element = description_elements[0]
+                    
+                    # Attempt to reformat content within the container
+                    # Prioritize list items, then paragraphs, then general text content
+                    lines = []
+                    # Check for <ul> -> <li> structure
+                    ul_tags = container_element.xpath('.//ul') # Find all ul descendants
+                    processed_li = False
+                    for ul in ul_tags:
+                        li_tags = ul.xpath('./li') # Find direct li children of this ul
+                        for li in li_tags:
+                            line_text = li.text_content().strip()
+                            if line_text:
+                                lines.append(line_text)
+                                processed_li = True
+                        if processed_li and ul_tags.index(ul) < len(ul_tags) -1 : # Add a separator between multiple ULs
+                            lines.append("---")
+
+
+                    # If no <li> items were processed, try <p> tags
+                    if not processed_li:
+                        p_tags = container_element.xpath('.//p') # Find all p descendants
+                        for p_tag in p_tags:
+                            line_text = p_tag.text_content().strip()
+                            if line_text:
+                                lines.append(line_text)
+                    
+                    # If still no lines, get all text content from the container
+                    if not lines:
+                        full_text_content = container_element.text_content()
+                        # Split by newlines that might exist in the raw text, then strip each line
+                        raw_lines = full_text_content.split('\n')
+                        for raw_line in raw_lines:
+                            stripped_line = raw_line.strip()
+                            if stripped_line: # Add only non-empty lines
+                                lines.append(stripped_line)
+                    
+                    if lines:
+                        description_text_from_xpath = "\n".join(lines)
+                        print(f"[{self.site_name}] DEBUG: Extracted and reformatted description from XPath. Length: {len(description_text_from_xpath)}, Preview: '{description_text_from_xpath[:200]}...'")
+                    else:
+                        print(f"[{self.site_name}] DEBUG: Description container at XPath found, but no text content extracted after formatting attempts.")
+                else:
+                    print(f"[{self.site_name}] DEBUG: Description container NOT found with XPath: {description_container_xpath}")
+
+            except Exception as e:
+                print(f"[{self.site_name}] Error extracting or reformatting description with XPath: {e}")
+        else:
+            print(f"[{self.site_name}] lxml not available or HTML content missing, cannot use XPath for description.")
+
+        # Assign to details['description']
+        if description_text_from_xpath and description_text_from_xpath.strip():
+            details['description'] = description_text_from_xpath[:1000] + '...' if len(description_text_from_xpath) > 1000 else description_text_from_xpath
+        else:
+            # Fallback to original "Szczegóły ogłoszenia" if XPath fails and if that logic is still desired
+            # For now, if XPath fails, it will be N/A as per user's focus on the XPath.
+            # If a more complex fallback is needed, the old logic for 'oglDetails' and 'Opis oferty' header could be reinstated here.
+            print(f"[{self.site_name}] DEBUG: Description from XPath is empty or None. Setting to N/A.")
+            details['description'] = 'N/A' # Explicitly N/A if XPath method fails to yield content
+
+        # Log final description status
+        if details['description'] != 'N/A':
+            print(f"[{self.site_name}] Final Description assigned. Length: {len(details['description'])}, Preview: {details['description'][:100]}")
+        else:
+            print(f"[{self.site_name}] Final Description: N/A (XPath method did not yield content or lxml was unavailable).")
+
+
+        # Area extraction - keeping existing XPath and fallback logic
+        # Ensure 'tree' is available if lxml_html is True
+        if lxml_html and html_content and ('tree' not in locals() or tree is None):
+            try:
+                tree = lxml_html.fromstring(html_content)
+            except Exception as e:
+                print(f"[{self.site_name}] Error re-parsing HTML with lxml for Area: {e}")
+                # tree will remain None or as it was, potentially causing issues for subsequent XPath if not handled
+        
+        if lxml_html and 'tree' in locals() and tree is not None: # Check if tree was successfully parsed
+            try:
                 area_elements = tree.xpath('/html/body/main/div[2]/div[2]/div/div/div[1]/div[1]/div[9]/ul/li[2]/span[2]')
                 if area_elements:
                     details['area_m2'] = area_elements[0].text_content().strip()
                     print(f"[{self.site_name}] Area (XPath): {details['area_m2']}")
             except Exception as e:
                 print(f"[{self.site_name}] Error extracting area with XPath: {e}. Falling back to BeautifulSoup.")
-
-        details_section = soup.find('div', class_='oglDetails') # Lento uses this class for details block
-        if details_section:
-            print(f"[{self.site_name}] DEBUG: Found 'oglDetails' section.")
-            details_list_items = details_section.find_all('li')
-            if not details_list_items: # Sometimes it's divs instead of li
-                print(f"[{self.site_name}] DEBUG: No 'li' items in 'oglDetails', trying 'div[class^=param param-]'.")
-                details_list_items = details_section.find_all('div', class_=lambda x: x and x.startswith('param param-'))
-            
-            if not details_list_items:
-                print(f"[{self.site_name}] DEBUG: Still no items found in 'oglDetails' after trying both 'li' and 'div[class^=param param-]'.")
-            else:
-                print(f"[{self.site_name}] DEBUG: Found {len(details_list_items)} items in 'oglDetails' section.")
-
-            section_details_text = []
-            for item_idx, item in enumerate(details_list_items):
-                item_text = item.get_text(strip=True)
-                if item_text:
-                    print(f"[{self.site_name}] oglDetails item #{item_idx}: '{item_text[:100]}'")
-                    section_details_text.append(item_text)
-                    # Fallback for area if XPath failed
-                    if details['area_m2'] == 'N/A' and 'Powierzchnia:' in item_text:
-                        area_match = re.search(r'Powierzchnia:\s*([\d,.]+\s*m2)', item_text, re.IGNORECASE)
-                        if area_match:
-                            details['area_m2'] = area_match.group(1).strip()
-                            print(f"[{self.site_name}] Area (BeautifulSoup fallback from details list): {details['area_m2']}")
-            if section_details_text:
-                print(f"[{self.site_name}] DEBUG: Extracted section_details_text: {section_details_text}")
-                # Keep section_details_text as a list of strings for better formatting later
-                description_parts.append("Szczegóły ogłoszenia:")
-                description_parts.extend(section_details_text) # Add each item as a new element
-            else:
-                print(f"[{self.site_name}] DEBUG: No text items extracted from 'oglDetails' section (section_details_text is empty).")
-        else:
-            print(f"[{self.site_name}] DEBUG: 'oglDetails' section not found.")
         
-        if details['area_m2'] == 'N/A': # Final fallback if not found in oglDetails list items
-            print(f"[{self.site_name}] Area not found by XPath or in oglDetails list. Current value: {details['area_m2']}")
-        else:
-            print(f"[{self.site_name}] Area after all attempts: {details['area_m2']}")
-
-
-        # "Opis oferty"
-        print(f"[{self.site_name}] DEBUG: Attempting to find 'Opis oferty' header.")
-        description_header = soup.find('h3', string=re.compile(r'Opis oferty', re.IGNORECASE))
-        if description_header:
-            print(f"[{self.site_name}] DEBUG: Found 'Opis oferty' header: '{description_header.get_text(strip=True)}'")
-            description_content_div = description_header.find_next_sibling('div', class_='description')
-            if not description_content_div: # Fallback if class is not 'description'
-                 print(f"[{self.site_name}] DEBUG: 'Opis oferty' content div with class 'description' not found, trying generic next div.")
-                 description_content_div = description_header.find_next_sibling('div')
-
-            if description_content_div:
-                print(f"[{self.site_name}] DEBUG: Found content div for 'Opis oferty'. Attempting to extract text.")
-                main_description_text = description_content_div.get_text(separator='\n', strip=True)
-                if main_description_text:
-                    print(f"[{self.site_name}] DEBUG: Extracted main description text. Length: {len(main_description_text)}, Preview: '{main_description_text[:100]}'")
-                    description_parts.append("\nOpis główny:\n" + main_description_text) # Changed label for clarity
-                else:
-                    print(f"[{self.site_name}] DEBUG: 'Opis oferty' content div found, but no text extracted from it.")
+        if details['area_m2'] == 'N/A': # Fallback for area
+            details_section_for_area = soup.find('div', class_='oglDetails')
+            if details_section_for_area:
+                area_items = details_section_for_area.find_all(['li', 'div'], string=re.compile(r'Powierzchnia:', re.IGNORECASE))
+                for item in area_items:
+                    area_match = re.search(r'Powierzchnia:\s*([\d,.]+\s*m2)', item.get_text(strip=True), re.IGNORECASE)
+                    if area_match:
+                        details['area_m2'] = area_match.group(1).strip()
+                        print(f"[{self.site_name}] Area (BeautifulSoup fallback from details list): {details['area_m2']}")
+                        break 
+            if details['area_m2'] == 'N/A':
+                 print(f"[{self.site_name}] Area not found by XPath or in oglDetails list. Current value: {details['area_m2']}")
             else:
-                print(f"[{self.site_name}] DEBUG: Content div for 'Opis oferty' not found after header.")
-        else:
-            print(f"[{self.site_name}] DEBUG: 'Opis oferty' header not found.")
+                print(f"[{self.site_name}] Area after all attempts: {details['area_m2']}")
 
-        # Add content from specific XPath to description - REMOVED AS PER USER REQUEST
-        # if lxml_html and html_content:
-        #     try:
-        #         if 'tree' not in locals() or tree is None:
-        #             tree = lxml_html.fromstring(html_content)
-        #         
-        #         additional_content_elements = tree.xpath('/html/body/main/div[2]/div[2]/div/div/div[1]/div[1]/div[9]')
-        #         if additional_content_elements:
-        #             additional_content_text = additional_content_elements[0].text_content().strip()
-        #             if additional_content_text:
-        #                 description_parts.append("\nDodatkowe informacje (z XPath div[9]):\n" + additional_content_text)
-        #                 print(f"[{self.site_name}] Added content from XPath div[9] to description. Length: {len(additional_content_text)}")
-        #     except Exception as e:
-        #         print(f"[{self.site_name}] Error extracting content from XPath div[9]: {e}")
-
-        if description_parts:
-            print(f"[{self.site_name}] DEBUG: Initial description_parts before processing for final join: {description_parts}")
-            # Join parts, ensuring "Szczegóły ogłoszenia:" is followed by its items on new lines
-            # and "Opis główny:" is also handled correctly.
-            processed_description_parts = []
-            is_details_section = False
-            for part in description_parts:
-                if part == "Szczegóły ogłoszenia:":
-                    processed_description_parts.append(part)
-                    is_details_section = True
-                elif part.startswith("Opis główny:"):
-                    processed_description_parts.append("\n" + part) # Add a newline before "Opis główny"
-                    is_details_section = False
-                elif is_details_section:
-                    processed_description_parts.append(part) # Each detail item on its own "line" in the list
-                else: # Should be main description text if any, or other future sections
-                    processed_description_parts.append(part)
-            
-            print(f"[{self.site_name}] DEBUG: Processed description_parts for joining: {processed_description_parts}")
-            full_description = "\n".join(filter(None, processed_description_parts))
-            print(f"[{self.site_name}] DEBUG: Full description after join (before stripping and assigning): '{full_description[:200]}...' (Total length: {len(full_description)})") # Log preview
-            
-            if full_description.strip(): # Check if non-blank after stripping
-                details['description'] = full_description[:1000] + '...' if len(full_description) > 1000 else full_description
-            # else, details['description'] remains 'N/A' from initialization
-        
-        # Log final description status
-        if details['description'] != 'N/A':
-            print(f"[{self.site_name}] Final Description assigned. Length: {len(details['description'])}, Preview: {details['description'][:100]}")
-        else:
-            print(f"[{self.site_name}] Final Description: N/A (description_parts was empty or full_description was blank after processing).")
 
         # Image count and First Image URL
         # Lento often has a gallery indicator like "1/12"
