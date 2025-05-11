@@ -339,7 +339,7 @@ class AdresowoScraper(BaseScraper):
         details['area_m2'] = area_text.strip() if area_text != 'N/A' else 'N/A'
 
         # Description
-        description_tag = soup.find('div', class_='description')
+        description_tag = soup.find('div', class_='offer-description__summary') or soup.find('div', class_='description')
         if description_tag:
             # Remove empty lines and join with newlines
             description_text = '\n'.join(
