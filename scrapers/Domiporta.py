@@ -150,7 +150,10 @@ class DomiportaScraper(BaseScraper):
         if area_quadric_p_tag:
             extracted_value = area_quadric_p_tag.get_text(strip=True).replace('\xa0', ' ')
             if extracted_value and any(char.isdigit() for char in extracted_value):
-                area_text = extracted_value
+                # Further check: avoid accepting just "m2" or "m²"
+                temp_check_val = extracted_value.lower().replace(' ', '')
+                if not (temp_check_val == 'm2' or temp_check_val == 'm²'):
+                    area_text = extracted_value
 
         # Method 2: Try list/span format (e.g., features__item_name / features__item_value)
         # Example: <span class="features__item_name">Powierzchnia</span> <span class="features__item_value">55 m²</span>
@@ -162,7 +165,9 @@ class DomiportaScraper(BaseScraper):
                 if area_value_span:
                     extracted_value = area_value_span.get_text(strip=True).replace('\xa0', ' ')
                     if extracted_value and any(char.isdigit() for char in extracted_value):
-                        area_text = extracted_value
+                        temp_check_val = extracted_value.lower().replace(' ', '')
+                        if not (temp_check_val == 'm2' or temp_check_val == 'm²'):
+                            area_text = extracted_value
         
         # Method 3: Try common semantic HTML for key-value pairs (dt/dd, th/td)
         if area_text is None:
@@ -179,8 +184,10 @@ class DomiportaScraper(BaseScraper):
                 if value_element:
                     extracted_value = value_element.get_text(strip=True).replace('\xa0', ' ')
                     if extracted_value and any(char.isdigit() for char in extracted_value):
-                        area_text = extracted_value
-                        break # Found a plausible value from a key-value pair
+                        temp_check_val = extracted_value.lower().replace(' ', '')
+                        if not (temp_check_val == 'm2' or temp_check_val == 'm²'):
+                            area_text = extracted_value
+                            break # Found a plausible value from a key-value pair
         
         # Method 4: Fallback to 'paramIconFloorArea' (more common on listing cards than detail pages)
         if area_text is None:
@@ -188,7 +195,9 @@ class DomiportaScraper(BaseScraper):
             if area_tag:
                 extracted_value = area_tag.get_text(strip=True).replace('\xa0', ' ')
                 if extracted_value and any(char.isdigit() for char in extracted_value):
-                    area_text = extracted_value
+                    temp_check_val = extracted_value.lower().replace(' ', '')
+                    if not (temp_check_val == 'm2' or temp_check_val == 'm²'):
+                        area_text = extracted_value
         
         details['area_m2'] = area_text if area_text is not None else 'N/A'
 
