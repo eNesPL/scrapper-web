@@ -321,7 +321,9 @@ class LentoScraper(BaseScraper):
                             details['area_m2'] = area_match.group(1).strip()
                             print(f"[{self.site_name}] Area (BeautifulSoup fallback from details list): {details['area_m2']}")
             if section_details_text:
-                description_parts.append("Szczegóły ogłoszenia:\n" + "\n".join(section_details_text))
+                # Keep section_details_text as a list of strings for better formatting later
+                description_parts.append("Szczegóły ogłoszenia:")
+                description_parts.extend(section_details_text) # Add each item as a new element
         
         if details['area_m2'] == 'N/A': # Final fallback if not found in oglDetails list items
             print(f"[{self.site_name}] Area not found by XPath or in oglDetails list. Current value: {details['area_m2']}")
@@ -341,23 +343,39 @@ class LentoScraper(BaseScraper):
                 if main_description_text:
                     description_parts.append("\nOpis główny:\n" + main_description_text) # Changed label for clarity
 
-        # Add content from specific XPath to description
-        if lxml_html and html_content:
-            try:
-                if 'tree' not in locals() or tree is None:
-                    tree = lxml_html.fromstring(html_content)
-                
-                additional_content_elements = tree.xpath('/html/body/main/div[2]/div[2]/div/div/div[1]/div[1]/div[9]')
-                if additional_content_elements:
-                    additional_content_text = additional_content_elements[0].text_content().strip()
-                    if additional_content_text:
-                        description_parts.append("\nDodatkowe informacje (z XPath div[9]):\n" + additional_content_text)
-                        print(f"[{self.site_name}] Added content from XPath div[9] to description. Length: {len(additional_content_text)}")
-            except Exception as e:
-                print(f"[{self.site_name}] Error extracting content from XPath div[9]: {e}")
+        # Add content from specific XPath to description - REMOVED AS PER USER REQUEST
+        # if lxml_html and html_content:
+        #     try:
+        #         if 'tree' not in locals() or tree is None:
+        #             tree = lxml_html.fromstring(html_content)
+        #         
+        #         additional_content_elements = tree.xpath('/html/body/main/div[2]/div[2]/div/div/div[1]/div[1]/div[9]')
+        #         if additional_content_elements:
+        #             additional_content_text = additional_content_elements[0].text_content().strip()
+        #             if additional_content_text:
+        #                 description_parts.append("\nDodatkowe informacje (z XPath div[9]):\n" + additional_content_text)
+        #                 print(f"[{self.site_name}] Added content from XPath div[9] to description. Length: {len(additional_content_text)}")
+        #     except Exception as e:
+        #         print(f"[{self.site_name}] Error extracting content from XPath div[9]: {e}")
 
         if description_parts:
-            full_description = "\n\n".join(filter(None, description_parts))
+            # Join parts, ensuring "Szczegóły ogłoszenia:" is followed by its items on new lines
+            # and "Opis główny:" is also handled correctly.
+            processed_description_parts = []
+            is_details_section = False
+            for part in description_parts:
+                if part == "Szczegóły ogłoszenia:":
+                    processed_description_parts.append(part)
+                    is_details_section = True
+                elif part.startswith("Opis główny:"):
+                    processed_description_parts.append("\n" + part) # Add a newline before "Opis główny"
+                    is_details_section = False
+                elif is_details_section:
+                    processed_description_parts.append(part) # Each detail item on its own "line" in the list
+                else: # Should be main description text if any, or other future sections
+                    processed_description_parts.append(part)
+            
+            full_description = "\n".join(filter(None, processed_description_parts))
             details['description'] = full_description[:1000] + '...' if len(full_description) > 1000 else full_description
         print(f"[{self.site_name}] Description length: {len(details['description'])}")
 
