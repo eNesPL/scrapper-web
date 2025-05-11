@@ -253,47 +253,86 @@ class DomiportaScraper(BaseScraper):
         details['area_m2'] = area_text if area_text is not None else 'N/A'
 
         # Description
-        description_text = None
-        description_element = soup.find(attrs={"itemprop": "description"})
+        details['description'] = 'N/A' # Default to N/A
+        extracted_description_text = None
 
-        if description_element:
-            # Get all text, including from children, join paragraphs with newlines
-            paragraphs = description_element.find_all('p')
+        # Method 1: itemprop="description"
+        description_element_itemprop = soup.find(attrs={"itemprop": "description"})
+        if description_element_itemprop:
+            paragraphs = description_element_itemprop.find_all('p')
             if paragraphs:
-                description_text = "\n".join(p.get_text(strip=True) for p in paragraphs if p.get_text(strip=True))
+                extracted_description_text = "\n".join(p.get_text(strip=True) for p in paragraphs if p.get_text(strip=True))
             else:
-                # Fallback if no <p> tags, get all text from the element
-                description_text = description_element.get_text(separator="\n", strip=True)
+                extracted_description_text = description_element_itemprop.get_text(separator="\n", strip=True)
             
-            if description_text and description_text.strip():
-                details['description'] = description_text[:1000] + '...' if len(description_text) > 1000 else description_text
-                print(f"[{self.site_name}] Description found using itemprop: Length {len(details['description'])}, Preview: {details['description'][:100]}")
+            if extracted_description_text and extracted_description_text.strip():
+                print(f"[{self.site_name}] Description found using itemprop. Length: {len(extracted_description_text)}")
             else:
-                details['description'] = 'N/A'
-                print(f"[{self.site_name}] Description element with itemprop found, but no text content.")
-        else:
-            # Fallback: Try to find a div with a class that often contains description
-            # This is a guess, might need adjustment based on actual site structure if itemprop fails
-            description_div_fallback = soup.find('div', class_='description__rolled') # Example class, adjust if needed
-            if not description_div_fallback:
-                 description_div_fallback = soup.find('div', class_='ogl__description') # Another common class
-
-            if description_div_fallback:
-                paragraphs = description_div_fallback.find_all('p')
+                extracted_description_text = None # Reset if empty
+                print(f"[{self.site_name}] Description itemprop element found, but no text content.")
+        
+        # Method 2: class 'description__text' (often used on Domiporta)
+        if not extracted_description_text:
+            description_div_text_class = soup.find('div', class_='description__text')
+            if description_div_text_class:
+                paragraphs = description_div_text_class.find_all('p')
                 if paragraphs:
-                    description_text = "\n".join(p.get_text(strip=True) for p in paragraphs if p.get_text(strip=True))
+                    extracted_description_text = "\n".join(p.get_text(strip=True) for p in paragraphs if p.get_text(strip=True))
                 else:
-                    description_text = description_div_fallback.get_text(separator="\n", strip=True)
+                    extracted_description_text = description_div_text_class.get_text(separator="\n", strip=True)
 
-                if description_text and description_text.strip():
-                    details['description'] = description_text[:1000] + '...' if len(description_text) > 1000 else description_text
-                    print(f"[{self.site_name}] Description found using fallback class: Length {len(details['description'])}, Preview: {details['description'][:100]}")
+                if extracted_description_text and extracted_description_text.strip():
+                    print(f"[{self.site_name}] Description found using class 'description__text'. Length: {len(extracted_description_text)}")
                 else:
-                    details['description'] = 'N/A'
-                    print(f"[{self.site_name}] Description fallback element found, but no text content.")
+                    extracted_description_text = None # Reset if empty
+                    print(f"[{self.site_name}] Description 'description__text' element found, but no text content.")
             else:
-                details['description'] = 'N/A'
-                print(f"[{self.site_name}] Description not found using itemprop or fallback class.")
+                print(f"[{self.site_name}] Description element with class 'description__text' not found.")
+
+        # Method 3: class 'ogl__description' (another common class)
+        if not extracted_description_text:
+            description_div_ogl_class = soup.find('div', class_='ogl__description')
+            if description_div_ogl_class:
+                paragraphs = description_div_ogl_class.find_all('p')
+                if paragraphs:
+                    extracted_description_text = "\n".join(p.get_text(strip=True) for p in paragraphs if p.get_text(strip=True))
+                else:
+                    extracted_description_text = description_div_ogl_class.get_text(separator="\n", strip=True)
+
+                if extracted_description_text and extracted_description_text.strip():
+                    print(f"[{self.site_name}] Description found using class 'ogl__description'. Length: {len(extracted_description_text)}")
+                else:
+                    extracted_description_text = None # Reset if empty
+                    print(f"[{self.site_name}] Description 'ogl__description' element found, but no text content.")
+            else:
+                print(f"[{self.site_name}] Description element with class 'ogl__description' not found.")
+
+        # Method 4: class 'description__rolled' (fallback)
+        if not extracted_description_text:
+            description_div_rolled_class = soup.find('div', class_='description__rolled')
+            if description_div_rolled_class:
+                paragraphs = description_div_rolled_class.find_all('p')
+                if paragraphs:
+                    extracted_description_text = "\n".join(p.get_text(strip=True) for p in paragraphs if p.get_text(strip=True))
+                else:
+                    extracted_description_text = description_div_rolled_class.get_text(separator="\n", strip=True)
+                
+                if extracted_description_text and extracted_description_text.strip():
+                    print(f"[{self.site_name}] Description found using class 'description__rolled'. Length: {len(extracted_description_text)}")
+                else:
+                    extracted_description_text = None # Reset if empty
+                    print(f"[{self.site_name}] Description 'description__rolled' element found, but no text content.")
+            else:
+                print(f"[{self.site_name}] Description element with class 'description__rolled' not found.")
+
+        # Final assignment
+        if extracted_description_text:
+            details['description'] = extracted_description_text[:1000] + '...' if len(extracted_description_text) > 1000 else extracted_description_text
+        
+        if details['description'] != 'N/A':
+            print(f"[{self.site_name}] Final Description assigned. Length: {len(details['description'])}, Preview: {details['description'][:100]}")
+        else:
+            print(f"[{self.site_name}] Final Description: N/A (no method yielded content).")
 
         # Image count
         # Look for a container with class 'js-gallery__container'
