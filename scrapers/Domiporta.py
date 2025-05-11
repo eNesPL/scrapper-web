@@ -261,11 +261,20 @@ class DomiportaScraper(BaseScraper):
             details['description'] = 'N/A'
 
         # Image count
-        gallery = soup.find('div', class_='gallery')
-        if gallery:
-            details['image_count'] = len(gallery.find_all('img'))
+        # Look for a container with class 'js-gallery__container'
+        gallery_container = soup.find(class_='js-gallery__container')
+        if gallery_container:
+            # Count all 'img' tags within this container
+            details['image_count'] = len(gallery_container.find_all('img'))
         else:
-            details['image_count'] = 0
+            # Fallback to the old method if 'js-gallery__container' is not found
+            gallery = soup.find('div', class_='gallery')
+            if gallery:
+                details['image_count'] = len(gallery.find_all('img'))
+            else:
+                details['image_count'] = 0
+        print(f"[{self.site_name}] Image count: {details['image_count']}")
+
 
         # Additional details
         details_table = soup.find('table', class_='parameters')
