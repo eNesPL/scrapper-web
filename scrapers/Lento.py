@@ -287,7 +287,18 @@ class LentoScraper(BaseScraper):
         # Description and other details from "Szczegóły ogłoszenia" and "Opis oferty"
         description_parts = []
         
-        # "Szczegóły ogłoszenia"
+        # "Szczegóły ogłoszenia" - including Area extraction via XPath first
+        if lxml_html and html_content:
+            try:
+                if 'tree' not in locals() or tree is None:
+                    tree = lxml_html.fromstring(html_content)
+                area_elements = tree.xpath('/html/body/main/div[2]/div[2]/div/div/div[1]/div[1]/div[9]/ul/li[2]/span[2]')
+                if area_elements:
+                    details['area_m2'] = area_elements[0].text_content().strip()
+                    print(f"[{self.site_name}] Area (XPath): {details['area_m2']}")
+            except Exception as e:
+                print(f"[{self.site_name}] Error extracting area with XPath: {e}. Falling back to BeautifulSoup.")
+
         details_section = soup.find('div', class_='oglDetails') # Lento uses this class for details block
         if details_section:
             details_list_items = details_section.find_all('li')
@@ -299,13 +310,20 @@ class LentoScraper(BaseScraper):
                 item_text = item.get_text(strip=True)
                 if item_text:
                     section_details_text.append(item_text)
-                    if 'Powierzchnia:' in item_text and details['area_m2'] == 'N/A':
+                    # Fallback for area if XPath failed
+                    if details['area_m2'] == 'N/A' and 'Powierzchnia:' in item_text:
                         area_match = re.search(r'Powierzchnia:\s*([\d,.]+\s*m2)', item_text, re.IGNORECASE)
                         if area_match:
                             details['area_m2'] = area_match.group(1).strip()
+                            print(f"[{self.site_name}] Area (BeautifulSoup fallback from details list): {details['area_m2']}")
             if section_details_text:
                 description_parts.append("Szczegóły ogłoszenia:\n" + "\n".join(section_details_text))
-        print(f"[{self.site_name}] Area from details section: {details['area_m2']}")
+        
+        if details['area_m2'] == 'N/A': # Final fallback if not found in oglDetails list items
+            print(f"[{self.site_name}] Area not found by XPath or in oglDetails list. Current value: {details['area_m2']}")
+        else:
+            print(f"[{self.site_name}] Area after all attempts: {details['area_m2']}")
+
 
         # "Opis oferty"
         description_header = soup.find('h3', string=re.compile(r'Opis oferty', re.IGNORECASE))
