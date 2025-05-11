@@ -19,7 +19,7 @@ class AdresowoScraper(BaseScraper):
                          notification_manager=notification_manager)
         self.base_url = "https://adresowo.pl"
         # Using the hardcoded URL as requested for fetching listings
-        self.hardcoded_listings_url = "https://adresowo.pl/f/mieszkania/gliwice/a25_ff0f1p2_p-30"
+        self.hardcoded_listings_url = "https://adresowo.pl/f/mieszkania/gliwice/a25_ff0f1p2p3_p-30"
 
     def fetch_listings_page(self, search_criteria):
         """
