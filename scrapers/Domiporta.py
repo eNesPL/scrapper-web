@@ -343,14 +343,46 @@ class DomiportaScraper(BaseScraper):
             else:
                 print(f"[{self.site_name}] Description element with generic class 'description' not found.")
 
-        # Final assignment
-        if extracted_description_text:
-            details['description'] = extracted_description_text[:1000] + '...' if len(extracted_description_text) > 1000 else extracted_description_text
+        # Attempt to extract "Informacje dodatkowe"
+        additional_info_text = None
+        additional_info_container = soup.find('div', class_='features__container features__list-feature')
+        if additional_info_container:
+            dt_tag = additional_info_container.find('dt', class_='features__item_name', string=lambda t: t and 'Informacje dodatkowe' in t.strip())
+            if dt_tag:
+                dd_tag = dt_tag.find_next_sibling('dd', class_='features__item_value')
+                if dd_tag:
+                    additional_info_text = dd_tag.get_text(strip=True)
+                    if additional_info_text:
+                        print(f"[{self.site_name}] Found 'Informacje dodatkowe': {additional_info_text}")
+                    else:
+                        print(f"[{self.site_name}] 'Informacje dodatkowe' dd tag found, but no text content.")
+                else:
+                    print(f"[{self.site_name}] 'Informacje dodatkowe' dt tag found, but no corresponding dd tag.")
+            else:
+                print(f"[{self.site_name}] 'Informacje dodatkowe' dt tag not found in features__list-feature container.")
+        else:
+            print(f"[{self.site_name}] Container 'features__container features__list-feature' for additional info not found.")
+
+        # Combine extracted description with additional info
+        final_description_parts = []
+        if extracted_description_text and extracted_description_text.strip():
+            final_description_parts.append(extracted_description_text)
         
+        if additional_info_text and additional_info_text.strip():
+            if final_description_parts: # If there was a main description, add a separator
+                final_description_parts.append("\n\nInformacje dodatkowe:\n" + additional_info_text)
+            else: # If no main description, additional info becomes the description
+                final_description_parts.append("Informacje dodatkowe:\n" + additional_info_text)
+
+        if final_description_parts:
+            full_description = "\n".join(final_description_parts)
+            details['description'] = full_description[:1000] + '...' if len(full_description) > 1000 else full_description
+        
+        # Log final description status
         if details['description'] != 'N/A':
             print(f"[{self.site_name}] Final Description assigned. Length: {len(details['description'])}, Preview: {details['description'][:100]}")
         else:
-            print(f"[{self.site_name}] Final Description: N/A (no method yielded content).")
+            print(f"[{self.site_name}] Final Description: N/A (no method yielded content, including additional info).")
 
         # Image count
         # Look for a container with class 'js-gallery__container'
