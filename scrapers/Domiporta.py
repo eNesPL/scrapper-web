@@ -142,8 +142,21 @@ class DomiportaScraper(BaseScraper):
         details['price'] = price_tag.get_text(strip=True).replace('\xa0', ' ') if price_tag else 'N/A'
 
         # Area
-        area_tag = soup.find('div', class_='paramIconFloorArea')
-        details['area_m2'] = area_tag.get_text(strip=True) if area_tag else 'N/A'
+        area_text = 'N/A'
+        # Try new format first
+        area_name_span = soup.find('span', class_='features__item_name', string='Powierzchnia całkowita')
+        if area_name_span:
+            area_value_span = area_name_span.find_next_sibling('span', class_='features__item_value')
+            if area_value_span:
+                area_text = area_value_span.get_text(strip=True).replace('\xa0', ' ')
+        
+        if area_text == 'N/A':
+            # Fallback to old format
+            area_tag = soup.find('div', class_='paramIconFloorArea')
+            if area_tag:
+                area_text = area_tag.get_text(strip=True).replace('\xa0', ' ')
+        
+        details['area_m2'] = area_text
 
         # Description
         description_div = soup.find('div', class_='description')
