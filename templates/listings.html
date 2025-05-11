@@ -58,6 +58,7 @@
             margin: 15px 0;
             line-height: 1.6;
             color: #34495e;
+            white-space: pre-line; /* This will preserve newlines from the description text */
         }
         .description ul {
             padding-left: 20px;
@@ -110,15 +111,7 @@
 
             <div class="description">
                 {% if listing.description and listing.description != 'N/A' %}
-                    {% if '\n' in listing.description %}
-                        <ul>
-                        {% for line in listing.description.split('\n') %}
-                            <li>{{ line }}</li>
-                        {% endfor %}
-                        </ul>
-                    {% else %}
-                        {{ listing.description }}
-                    {% endif %}
+                    {{ listing.description }}
                 {% else %}
                     Brak opisu
                 {% endif %}
