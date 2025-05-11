@@ -70,7 +70,7 @@ class DomiportaScraper(BaseScraper):
             title = title_tag.get_text(strip=True) if title_tag else 'N/A'
 
             # Extract price
-            price_tag = item.find('div', class_='price') or item.find('span', class_='price')
+            price_tag = item.find(attrs={"itemprop": "price"}) or item.find('div', class_='price') or item.find('span', class_='price')
             price = price_tag.get_text(strip=True).replace('\xa0', ' ') if price_tag else 'N/A'
 
             # Extract area and rooms
@@ -138,7 +138,7 @@ class DomiportaScraper(BaseScraper):
         details['title'] = title_tag.get_text(strip=True) if title_tag else 'N/A'
 
         # Price
-        price_tag = soup.find('div', class_='price')
+        price_tag = soup.find(attrs={"itemprop": "price"}) or soup.find('div', class_='price')
         details['price'] = price_tag.get_text(strip=True).replace('\xa0', ' ') if price_tag else 'N/A'
 
         # Area
