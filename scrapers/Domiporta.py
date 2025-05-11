@@ -53,8 +53,10 @@ class DomiportaScraper(BaseScraper):
         soup = BeautifulSoup(html_content, 'html.parser')
         listings = []
         
-        listing_items = soup.select('section.listing-item, div.listing-item')
-        print(f"[{self.site_name}] Found {len(listing_items)} listing sections")
+        # Select items that have both 'grid-item' and 'grid-item--cover' classes,
+        # but exclude those that also have 'grid-item--special'.
+        listing_items = soup.select('.grid-item.grid-item--cover:not(.grid-item--special)')
+        print(f"[{self.site_name}] Found {len(listing_items)} listing sections matching new criteria")
 
         for item in listing_items:
             # Extract URL
