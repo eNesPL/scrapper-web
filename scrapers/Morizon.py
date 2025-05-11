@@ -54,29 +54,18 @@ class MorizonScraper(BaseScraper):
         listings = []
         
         # Common selectors for listing items on Morizon
-        # Based on typical Morizon structure, as provided HTML is text-based
-        item_selectors = [
-            "article.mz-card", # New Morizon card style
-            "section.single-result", # Older style
-            "div.listing__item", # General item class
-            "div.property-item", # Another common one
-            "article.property-item" 
-        ]
+        # User confirmed that listings are <article class="mz-card">
         
-        listing_elements = []
-        for selector in item_selectors:
-            elements = soup.select(selector)
-            if elements:
-                listing_elements.extend(elements)
-                print(f"[{self.site_name}] Found {len(elements)} elements with selector '{selector}'")
+        listing_elements = soup.find_all('article', class_='mz-card')
         
-        # Remove duplicates if elements match multiple selectors
-        listing_elements = list(dict.fromkeys(listing_elements))
-
-        if not listing_elements: # Fallback if specific selectors fail
-            print(f"[{self.site_name}] No specific item selectors matched. Trying to find articles with links to /oferta/.")
-            listing_elements = soup.find_all('article') # General article tag
-            listing_elements = [el for el in listing_elements if el.find('a', href=re.compile(r'^/oferta/'))]
+        if not listing_elements:
+            print(f"[{self.site_name}] No elements with selector 'article.mz-card' found.")
+            # Optional: Add a broader fallback if needed, but for now, stick to user's confirmation.
+            # For example, a very generic fallback:
+            # listing_elements = soup.find_all('article', href=re.compile(r'^/oferta/'))
+            # print(f"[{self.site_name}] Attempting fallback: found {len(listing_elements)} articles with /oferta/ links.")
+        else:
+            print(f"[{self.site_name}] Found {len(listing_elements)} elements with selector 'article.mz-card'.")
 
 
         print(f"[{self.site_name}] Total unique potential listing elements found: {len(listing_elements)}.")
