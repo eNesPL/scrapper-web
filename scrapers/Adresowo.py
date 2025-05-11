@@ -296,11 +296,15 @@ class AdresowoScraper(BaseScraper):
 
         # Area (m2)
         area_text = 'N/A'
-        area_header = soup.find('div', string='Powierzchnia')
-        if area_header:
-            area_div = area_header.find_next_sibling('div')
-            if area_div:
-                area_text = area_div.get_text(strip=True)
+        # Szukaj diva zawierającego tekst 'Powierzchnia'
+        area_container = soup.find('div', string=lambda t: t and 'Powierzchnia' in t)
+        if area_container:
+            # Znajdź span z wartością i tekst po spanie
+            area_span = area_container.find('span', class_='offer-summary__value')
+            if area_span:
+                area_value = area_span.get_text(strip=True)
+                unit = area_span.next_sibling.strip() if area_span.next_sibling else 'm²'
+                area_text = f"{area_value} {unit}"
         
 
         # Final Fallback: try to extract from description if not found in dedicated field and still N/A
