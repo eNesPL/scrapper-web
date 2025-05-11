@@ -49,14 +49,20 @@ class GratkaScraper(BaseScraper):
         soup = BeautifulSoup(html_content, 'html.parser')
         listings = []
         
-        # Gratka often uses <article class="teaserUnified"> for listings
-        # or elements with data-testid="listing-item"
-        listing_elements = soup.find_all('article', class_='teaserUnified')
+        # Try finding listings by class 'card' first
+        listing_elements = soup.find_all(class_='card')
+        
         if not listing_elements:
-            # Fallback to another common pattern if the first one fails
+            # Fallback to <article class="teaserUnified">
+            print(f"[{self.site_name}] No elements with class 'card' found. Trying 'article.teaserUnified'.")
+            listing_elements = soup.find_all('article', class_='teaserUnified')
+        
+        if not listing_elements:
+            # Fallback to data-testid="listing-item"
+            print(f"[{self.site_name}] No elements with 'article.teaserUnified' found. Trying 'data-testid=listing-item'.")
             listing_elements = soup.find_all(attrs={"data-testid": "listing-item"})
 
-        print(f"[{self.site_name}] Found {len(listing_elements)} potential listing elements.")
+        print(f"[{self.site_name}] Found {len(listing_elements)} potential listing elements using combined methods.")
 
         for item_element in listing_elements:
             summary = {}
