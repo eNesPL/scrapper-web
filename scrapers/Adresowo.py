@@ -382,7 +382,7 @@ class AdresowoScraper(BaseScraper):
             # Fallback if not found in summary
             if image_count == 0:
                 print(f"[{self.site_name}] Image count not found in summary, checking gallery")
-                gallery_images = soup.select('img.gallery-slider__image')
+                gallery_images = soup.select('div.offer-gallery img')
                 image_count = len(gallery_images)
                 print(f"[{self.site_name}] Counted images in gallery: {image_count}")
         
