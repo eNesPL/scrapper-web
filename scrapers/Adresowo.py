@@ -354,18 +354,37 @@ class AdresowoScraper(BaseScraper):
         # Image Count
         image_count = 0
         if summary_container:
+            print(f"[{self.site_name}] Searching for image count in summary container")
             rows = summary_container.find_all('div', role='row')
             for row in rows:
                 row_text = ' '.join(row.stripped_strings)
-                if 'Zdjęć' in row_text or 'Zdjęcia' in row_text:
+                print(f"[{self.site_name}] Checking row: {row_text[:50]}...")
+                
+                if any(keyword in row_text for keyword in ['Zdjęć', 'Zdjęcia', 'Liczba zdjęć']):
                     count_span = row.find('span', class_='offer-summary__value')
                     if count_span:
+                        count_text = count_span.get_text(strip=True)
+                        print(f"[{self.site_name}] Found count span text: '{count_text}'")
                         try:
-                            image_count = int(count_span.get_text(strip=True))
-                            print(f"[{self.site_name}] Found image count: {image_count}")
+                            image_count = int(count_text)
+                            print(f"[{self.site_name}] Parsed image count: {image_count}")
+                            break
                         except ValueError:
-                            print(f"[{self.site_name}] Invalid image count value: {count_span.get_text()}")
-                    break
+                            print(f"[{self.site_name}] Failed to parse image count from: '{count_text}'")
+                    else:
+                        # Fallback - search for number in row text
+                        num_match = re.search(r'\d+', row_text)
+                        if num_match:
+                            image_count = int(num_match.group())
+                            print(f"[{self.site_name}] Extracted image count from row text: {image_count}")
+                            break
+            
+            # Fallback if not found in summary
+            if image_count == 0:
+                print(f"[{self.site_name}] Image count not found in summary, checking gallery")
+                gallery_images = soup.select('img.gallery-slider__image')
+                image_count = len(gallery_images)
+                print(f"[{self.site_name}] Counted images in gallery: {image_count}")
         
         details['image_count'] = image_count
         
