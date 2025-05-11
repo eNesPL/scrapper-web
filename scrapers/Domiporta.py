@@ -254,10 +254,31 @@ class DomiportaScraper(BaseScraper):
 
         # Description
         description_parts = []
+        main_description_content_status = "Not found or empty"
+        features_content_status = "Not found or empty"
+
         description_div = soup.find('div', class_='description')
         if description_div:
-            main_description = ' '.join([p.get_text(strip=True) for p in description_div.find_all('p')])
-            description_parts.append(main_description)
+            # Try to get all text directly from description_div first, then refine with <p>
+            # This handles cases where description might not be in <p> tags but directly in the div
+            direct_text = description_div.get_text(separator=' ', strip=True)
+            p_texts = [p.get_text(strip=True) for p in description_div.find_all('p')]
+            
+            main_description = ""
+            if p_texts: # Prefer text from <p> tags if available
+                main_description = ' '.join(filter(None, p_texts)) # Filter out None from get_text
+            elif direct_text: # Fallback to direct text from the div
+                main_description = direct_text
+            
+            if main_description.strip(): # Add only if it has content
+                description_parts.append(main_description)
+                main_description_content_status = f"Found, length: {len(main_description)}, preview: {main_description[:100]}"
+            else:
+                main_description_content_status = "Found, but no text content after stripping."
+        else:
+            main_description_content_status = "div.description not found."
+        print(f"[{self.site_name}] Description parsing - main_description_div: {main_description_content_status}")
+
 
         # Extract features from 'features__container' and append to description
         features_container = soup.find(class_='features__container')
@@ -274,7 +295,14 @@ class DomiportaScraper(BaseScraper):
                         features_text_parts.append(f"{name}: {value}")
             
             if features_text_parts:
-                description_parts.append("\nCechy dodatkowe:\n" + "\n".join(features_text_parts))
+                features_string = "\nCechy dodatkowe:\n" + "\n".join(features_text_parts)
+                description_parts.append(features_string)
+                features_content_status = f"Found {len(features_text_parts)} features. Preview: {features_string[:100]}"
+            else:
+                features_content_status = "features__container found, but no feature items extracted."
+        else:
+            features_content_status = "features__container not found."
+        print(f"[{self.site_name}] Description parsing - features_container: {features_content_status}")
         
         if description_parts:
             # Filtruj części, które są None, puste lub składają się tylko z białych znaków
@@ -288,6 +316,7 @@ class DomiportaScraper(BaseScraper):
         else:
             # Jeśli lista description_parts była pusta od początku
             details['description'] = 'N/A'
+        print(f"[{self.site_name}] Description parsing - final details['description'] length: {len(details['description']) if details.get('description') and details['description'] != 'N/A' else 0}, content preview: {details.get('description', 'N/A')[:100]}")
 
 
         # Image count
