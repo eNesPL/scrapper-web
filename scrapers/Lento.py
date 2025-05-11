@@ -192,8 +192,13 @@ class LentoScraper(BaseScraper):
         :return: HTML content (str) or None.
         """
         print(f"[{self.site_name}] Fetching details for URL: {listing_url}")
-        # TODO: Implement actual web request to the listing_url
-        pass
+        try:
+            response = requests.get(listing_url, timeout=10)
+            response.raise_for_status()
+            return response.text
+        except requests.exceptions.RequestException as e:
+            print(f"[{self.site_name}] Error fetching details page {listing_url}: {e}")
+            return None
 
     def parse_listing_details(self, html_content):
         """
@@ -204,11 +209,136 @@ class LentoScraper(BaseScraper):
         print(f"[{self.site_name}] Parsing listing details page content.")
         if not html_content:
             return {}
-        # TODO: Implement HTML parsing logic for Lento.pl listing detail page
-        # details = {}
-        # details.setdefault('title', 'N/A')
-        # details.setdefault('price', 'N/A')
-        # details.setdefault('description', 'N/A')
-        # details.setdefault('image_count', 0)
-        # return details
-        return {}
+
+        soup = BeautifulSoup(html_content, 'html.parser')
+        details = {
+            'title': 'N/A',
+            'price': 'N/A',
+            'area_m2': 'N/A',
+            'description': 'N/A',
+            'image_count': 0,
+            'first_image_url': None
+        }
+
+        # Title
+        title_tag = soup.find('div', class_='title') # Common container for title
+        if title_tag:
+            h2_title = title_tag.find('h2')
+            if h2_title:
+                details['title'] = h2_title.get_text(strip=True)
+        if details['title'] == 'N/A': # Fallback to main h1 or h2 if specific title structure not found
+            h1_tag = soup.find('h1')
+            if h1_tag:
+                details['title'] = h1_tag.get_text(strip=True)
+            else:
+                h2_fallback = soup.find('h2') # General h2
+                if h2_fallback:
+                     details['title'] = h2_fallback.get_text(strip=True)
+        print(f"[{self.site_name}] Title: {details['title']}")
+
+        # Price
+        price_div = soup.find('div', class_='price') # Main price display
+        if price_div:
+            price_strong = price_div.find('strong')
+            if price_strong:
+                details['price'] = price_strong.get_text(strip=True)
+        if details['price'] == 'N/A': # Fallback from details section
+            details_section_price = soup.find('div', class_='oglDetails')
+            if details_section_price:
+                price_item = details_section_price.find(lambda tag: tag.name == 'li' and 'Cena:' in tag.get_text())
+                if price_item:
+                    price_text_content = price_item.get_text(strip=True)
+                    # Extract price after "Cena:"
+                    match = re.search(r'Cena:\s*([\d\s]+zł)', price_text_content)
+                    if match:
+                        details['price'] = match.group(1).strip()
+        print(f"[{self.site_name}] Price: {details['price']}")
+
+        # Description and other details from "Szczegóły ogłoszenia" and "Opis oferty"
+        description_parts = []
+        
+        # "Szczegóły ogłoszenia"
+        details_section = soup.find('div', class_='oglDetails') # Lento uses this class for details block
+        if details_section:
+            details_list_items = details_section.find_all('li')
+            if not details_list_items: # Sometimes it's divs instead of li
+                details_list_items = details_section.find_all('div', class_=lambda x: x and x.startswith('param param-'))
+
+            section_details_text = []
+            for item in details_list_items:
+                item_text = item.get_text(strip=True)
+                if item_text:
+                    section_details_text.append(item_text)
+                    if 'Powierzchnia:' in item_text and details['area_m2'] == 'N/A':
+                        area_match = re.search(r'Powierzchnia:\s*([\d,.]+\s*m2)', item_text, re.IGNORECASE)
+                        if area_match:
+                            details['area_m2'] = area_match.group(1).strip()
+            if section_details_text:
+                description_parts.append("Szczegóły ogłoszenia:\n" + "\n".join(section_details_text))
+        print(f"[{self.site_name}] Area from details section: {details['area_m2']}")
+
+        # "Opis oferty"
+        description_header = soup.find('h3', string=re.compile(r'Opis oferty', re.IGNORECASE))
+        if description_header:
+            description_content_div = description_header.find_next_sibling('div', class_='description')
+            if not description_content_div: # Fallback if class is not 'description'
+                 description_content_div = description_header.find_next_sibling('div')
+
+            if description_content_div:
+                main_description_text = description_content_div.get_text(separator='\n', strip=True)
+                if main_description_text:
+                    description_parts.append("\nOpis:\n" + main_description_text)
+        
+        if description_parts:
+            full_description = "\n\n".join(filter(None, description_parts))
+            details['description'] = full_description[:1000] + '...' if len(full_description) > 1000 else full_description
+        print(f"[{self.site_name}] Description length: {len(details['description'])}")
+
+        # Image count and First Image URL
+        # Lento often has a gallery indicator like "1/12"
+        gallery_indicator = soup.find('div', class_='counter') # e.g., <div class="counter">1 / 12</div>
+        if gallery_indicator:
+            indicator_text = gallery_indicator.get_text(strip=True)
+            match = re.search(r'\d+\s*/\s*(\d+)', indicator_text)
+            if match:
+                details['image_count'] = int(match.group(1))
+        print(f"[{self.site_name}] Image count from indicator: {details['image_count']}")
+
+        # First image - Lento often uses a main image in a specific div or img tag
+        main_image_container = soup.find('div', class_=['photoview', 'main-photo', 'gallery-main-photo'])
+        if main_image_container:
+            img_tag = main_image_container.find('img')
+            if img_tag:
+                img_src = img_tag.get('src') or img_tag.get('data-src')
+                if img_src:
+                    if not img_src.startswith('http'):
+                        details['first_image_url'] = f"{self.base_url}{img_src if img_src.startswith('/') else '/' + img_src}"
+                    else:
+                        details['first_image_url'] = img_src
+        
+        if not details['first_image_url']: # Fallback if specific container not found
+            img_tag_general = soup.find('img', id='photoview_img') # Common ID for main image
+            if img_tag_general:
+                img_src = img_tag_general.get('src') or img_tag_general.get('data-src')
+                if img_src:
+                    if not img_src.startswith('http'):
+                        details['first_image_url'] = f"{self.base_url}{img_src if img_src.startswith('/') else '/' + img_src}"
+                    else:
+                        details['first_image_url'] = img_src
+        
+        # If image count is still 0 but we found a first_image_url, set count to at least 1
+        if details['image_count'] == 0 and details['first_image_url']:
+            details['image_count'] = 1
+            print(f"[{self.site_name}] Image count updated to 1 based on found first_image_url.")
+
+        print(f"[{self.site_name}] First image URL: {details['first_image_url']}")
+        
+        # Ensure essential fields are not None before returning
+        details.setdefault('title', 'N/A')
+        details.setdefault('price', 'N/A')
+        details.setdefault('description', 'N/A')
+        details.setdefault('image_count', 0)
+        details.setdefault('area_m2', 'N/A')
+
+        print(f"[{self.site_name}] Parsed details: Price='{details['price']}', Area='{details['area_m2']}', Title='{details['title'][:30]}...'")
+        return details
