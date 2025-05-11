@@ -145,13 +145,17 @@ class DomiportaScraper(BaseScraper):
         area_text = None
 
         # Method 1: Try to find by 'features-short__value-quadric' (often a <p> tag with the value)
-        # Example: <p class="features-short__value-quadric">70 m²</p>
+        # Example: <p class="features-short__value-quadric">70 m²</p> or <p class="features-short__value-quadric">27,19 m<sup>2</sup></p>
         area_quadric_p_tag = soup.find('p', class_='features-short__value-quadric')
         if area_quadric_p_tag:
+            # Handle potential <sup> tag within the area value
+            for sup_tag in area_quadric_p_tag.find_all('sup'):
+                sup_tag.unwrap() # Replaces <sup> tag with its content
+
             extracted_value = area_quadric_p_tag.get_text(strip=True).replace('\xa0', ' ')
             if extracted_value and any(char.isdigit() for char in extracted_value):
                 # Further check: avoid accepting just "m2" or "m²"
-                temp_check_val = extracted_value.lower().replace(' ', '')
+                temp_check_val = extracted_value.lower().replace(' ', '').replace(',', '.') # Normalize comma to dot for "m2" check
                 if not (temp_check_val == 'm2' or temp_check_val == 'm²'):
                     area_text = extracted_value
 
