@@ -339,8 +339,23 @@ class LentoScraper(BaseScraper):
             if description_content_div:
                 main_description_text = description_content_div.get_text(separator='\n', strip=True)
                 if main_description_text:
-                    description_parts.append("\nOpis:\n" + main_description_text)
-        
+                    description_parts.append("\nOpis główny:\n" + main_description_text) # Changed label for clarity
+
+        # Add content from specific XPath to description
+        if lxml_html and html_content:
+            try:
+                if 'tree' not in locals() or tree is None:
+                    tree = lxml_html.fromstring(html_content)
+                
+                additional_content_elements = tree.xpath('/html/body/main/div[2]/div[2]/div/div/div[1]/div[1]/div[9]')
+                if additional_content_elements:
+                    additional_content_text = additional_content_elements[0].text_content().strip()
+                    if additional_content_text:
+                        description_parts.append("\nDodatkowe informacje (z XPath div[9]):\n" + additional_content_text)
+                        print(f"[{self.site_name}] Added content from XPath div[9] to description. Length: {len(additional_content_text)}")
+            except Exception as e:
+                print(f"[{self.site_name}] Error extracting content from XPath div[9]: {e}")
+
         if description_parts:
             full_description = "\n\n".join(filter(None, description_parts))
             details['description'] = full_description[:1000] + '...' if len(full_description) > 1000 else full_description
