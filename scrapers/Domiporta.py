@@ -253,71 +253,47 @@ class DomiportaScraper(BaseScraper):
         details['area_m2'] = area_text if area_text is not None else 'N/A'
 
         # Description
-        description_parts = []
-        main_description_content_status = "Not found or empty"
-        features_content_status = "Not found or empty"
+        description_text = None
+        description_element = soup.find(attrs={"itemprop": "description"})
 
-        description_div = soup.find('div', class_='description')
-        if description_div:
-            # Try to get all text directly from description_div first, then refine with <p>
-            # This handles cases where description might not be in <p> tags but directly in the div
-            direct_text = description_div.get_text(separator=' ', strip=True)
-            p_texts = [p.get_text(strip=True) for p in description_div.find_all('p')]
-            
-            main_description = ""
-            if p_texts: # Prefer text from <p> tags if available
-                main_description = ' '.join(filter(None, p_texts)) # Filter out None from get_text
-            elif direct_text: # Fallback to direct text from the div
-                main_description = direct_text
-            
-            if main_description.strip(): # Add only if it has content
-                description_parts.append(main_description)
-                main_description_content_status = f"Found, length: {len(main_description)}, preview: {main_description[:100]}"
+        if description_element:
+            # Get all text, including from children, join paragraphs with newlines
+            paragraphs = description_element.find_all('p')
+            if paragraphs:
+                description_text = "\n".join(p.get_text(strip=True) for p in paragraphs if p.get_text(strip=True))
             else:
-                main_description_content_status = "Found, but no text content after stripping."
-        else:
-            main_description_content_status = "div.description not found."
-        print(f"[{self.site_name}] Description parsing - main_description_div: {main_description_content_status}")
-
-
-        # Extract features from 'features__container' and append to description
-        features_container = soup.find(class_='features__container')
-        if features_container:
-            features_text_parts = []
-            # Iterate over items, typically divs with class 'features__item'
-            for item in features_container.find_all(class_='features__item'):
-                name_tag = item.find(class_='features__item_name')
-                value_tag = item.find(class_='features__item_value')
-                if name_tag and value_tag:
-                    name = name_tag.get_text(strip=True)
-                    value = value_tag.get_text(strip=True)
-                    if name and value: # Ensure both name and value are present
-                        features_text_parts.append(f"{name}: {value}")
+                # Fallback if no <p> tags, get all text from the element
+                description_text = description_element.get_text(separator="\n", strip=True)
             
-            if features_text_parts:
-                features_string = "\nCechy dodatkowe:\n" + "\n".join(features_text_parts)
-                description_parts.append(features_string)
-                features_content_status = f"Found {len(features_text_parts)} features. Preview: {features_string[:100]}"
+            if description_text and description_text.strip():
+                details['description'] = description_text[:1000] + '...' if len(description_text) > 1000 else description_text
+                print(f"[{self.site_name}] Description found using itemprop: Length {len(details['description'])}, Preview: {details['description'][:100]}")
             else:
-                features_content_status = "features__container found, but no feature items extracted."
-        else:
-            features_content_status = "features__container not found."
-        print(f"[{self.site_name}] Description parsing - features_container: {features_content_status}")
-        
-        if description_parts:
-            # Filtruj części, które są None, puste lub składają się tylko z białych znaków
-            valid_description_parts = [part for part in description_parts if part and part.strip()]
-            if valid_description_parts:
-                full_description = "\n\n".join(valid_description_parts)
-                details['description'] = full_description[:1000] + '...' if len(full_description) > 1000 else full_description
-            else:
-                # Jeśli po odfiltrowaniu nie ma żadnych wartościowych części opisu
                 details['description'] = 'N/A'
+                print(f"[{self.site_name}] Description element with itemprop found, but no text content.")
         else:
-            # Jeśli lista description_parts była pusta od początku
-            details['description'] = 'N/A'
-        print(f"[{self.site_name}] Description parsing - final details['description'] length: {len(details['description']) if details.get('description') and details['description'] != 'N/A' else 0}, content preview: {details.get('description', 'N/A')[:100]}")
+            # Fallback: Try to find a div with a class that often contains description
+            # This is a guess, might need adjustment based on actual site structure if itemprop fails
+            description_div_fallback = soup.find('div', class_='description__rolled') # Example class, adjust if needed
+            if not description_div_fallback:
+                 description_div_fallback = soup.find('div', class_='ogl__description') # Another common class
 
+            if description_div_fallback:
+                paragraphs = description_div_fallback.find_all('p')
+                if paragraphs:
+                    description_text = "\n".join(p.get_text(strip=True) for p in paragraphs if p.get_text(strip=True))
+                else:
+                    description_text = description_div_fallback.get_text(separator="\n", strip=True)
+
+                if description_text and description_text.strip():
+                    details['description'] = description_text[:1000] + '...' if len(description_text) > 1000 else description_text
+                    print(f"[{self.site_name}] Description found using fallback class: Length {len(details['description'])}, Preview: {details['description'][:100]}")
+                else:
+                    details['description'] = 'N/A'
+                    print(f"[{self.site_name}] Description fallback element found, but no text content.")
+            else:
+                details['description'] = 'N/A'
+                print(f"[{self.site_name}] Description not found using itemprop or fallback class.")
 
         # Image count
         # Look for a container with class 'js-gallery__container'
