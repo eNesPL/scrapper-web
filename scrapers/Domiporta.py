@@ -143,15 +143,22 @@ class DomiportaScraper(BaseScraper):
 
         # Area
         area_text = 'N/A'
-        # Try new format first
-        area_name_span = soup.find('span', class_='features__item_name', string='Powierzchnia całkowita')
-        if area_name_span:
-            area_value_span = area_name_span.find_next_sibling('span', class_='features__item_value')
-            if area_value_span:
-                area_text = area_value_span.get_text(strip=True).replace('\xa0', ' ')
+        
+        # Try to find by 'features-short__value-quadric' first
+        area_quadric_span = soup.find('span', class_='features-short__value-quadric')
+        if area_quadric_span:
+            area_text = area_quadric_span.get_text(strip=True).replace('\xa0', ' ')
+
+        if area_text == 'N/A':
+            # Try new format if 'features-short__value-quadric' not found
+            area_name_span = soup.find('span', class_='features__item_name', string='Powierzchnia całkowita')
+            if area_name_span:
+                area_value_span = area_name_span.find_next_sibling('span', class_='features__item_value')
+                if area_value_span:
+                    area_text = area_value_span.get_text(strip=True).replace('\xa0', ' ')
         
         if area_text == 'N/A':
-            # Fallback to old format
+            # Fallback to old format if other methods fail
             area_tag = soup.find('div', class_='paramIconFloorArea')
             if area_tag:
                 area_text = area_tag.get_text(strip=True).replace('\xa0', ' ')
