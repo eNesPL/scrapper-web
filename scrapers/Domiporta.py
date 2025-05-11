@@ -144,14 +144,12 @@ class DomiportaScraper(BaseScraper):
         # Area
         area_text = None  # Initialize as None to distinguish from an empty string found
         
-        # Try to find by 'features-short__value-quadric' and then its child 'features-short__value'
-        area_quadric_span_outer = soup.find('span', class_='features-short__value-quadric')
-        if area_quadric_span_outer:
-            area_quadric_span_inner = area_quadric_span_outer.find('span', class_='features-short__value')
-            if area_quadric_span_inner:
-                extracted_value = area_quadric_span_inner.get_text(strip=True).replace('\xa0', ' ')
-                if extracted_value:  # Only use if non-empty
-                    area_text = extracted_value
+        # Try to find by 'features-short__value-quadric' (which is a <p> tag)
+        area_quadric_p_tag = soup.find('p', class_='features-short__value-quadric')
+        if area_quadric_p_tag:
+            extracted_value = area_quadric_p_tag.get_text(strip=True).replace('\xa0', ' ')
+            if extracted_value:  # Only use if non-empty
+                area_text = extracted_value
 
         if area_text is None:
             # Try new format if 'features-short__value-quadric' not found or was empty
