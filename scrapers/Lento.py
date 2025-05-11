@@ -359,6 +359,7 @@ class LentoScraper(BaseScraper):
         #         print(f"[{self.site_name}] Error extracting content from XPath div[9]: {e}")
 
         if description_parts:
+            print(f"[{self.site_name}] Initial description_parts: {description_parts}")
             # Join parts, ensuring "Szczegóły ogłoszenia:" is followed by its items on new lines
             # and "Opis główny:" is also handled correctly.
             processed_description_parts = []
@@ -375,9 +376,19 @@ class LentoScraper(BaseScraper):
                 else: # Should be main description text if any, or other future sections
                     processed_description_parts.append(part)
             
+            print(f"[{self.site_name}] Processed description_parts for joining: {processed_description_parts}")
             full_description = "\n".join(filter(None, processed_description_parts))
-            details['description'] = full_description[:1000] + '...' if len(full_description) > 1000 else full_description
-        print(f"[{self.site_name}] Description length: {len(details['description'])}")
+            print(f"[{self.site_name}] Full description after join (before stripping and assigning): '{full_description}'")
+            
+            if full_description.strip():
+                details['description'] = full_description[:1000] + '...' if len(full_description) > 1000 else full_description
+            # else, details['description'] remains 'N/A' from initialization
+        
+        # Log final description status
+        if details['description'] != 'N/A':
+            print(f"[{self.site_name}] Final Description assigned. Length: {len(details['description'])}, Preview: {details['description'][:100]}")
+        else:
+            print(f"[{self.site_name}] Final Description: N/A (description_parts was empty or full_description was blank).")
 
         # Image count and First Image URL
         # Lento often has a gallery indicator like "1/12"
