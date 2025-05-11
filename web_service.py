@@ -21,13 +21,20 @@ def get_listings_from_db():
         listing = dict(row)
         # Parse raw_data to extract additional fields
         try:
-            raw_data = json.loads(listing['raw_data'])
+            raw_data_str = listing.get('raw_data', '{}') # Get raw_data string, default to empty JSON string
+            print(f"Processing listing URL: {listing.get('url')}, Raw data string from DB: {raw_data_str[:200]}...") # Log raw_data
+            raw_data = json.loads(raw_data_str)
+            
             listing['area_m2'] = raw_data.get('area_m2', 'N/A')
-            listing['price'] = raw_data.get('price', 'N/A')
-            listing['description'] = raw_data.get('description', 'N/A')  # Dodajemy opis
-        except (json.JSONDecodeError, KeyError) as e:
+            listing['price'] = raw_data.get('price', listing.get('price', 'N/A')) # Prefer raw_data, fallback to column
+            listing['description'] = raw_data.get('description', listing.get('description', 'N/A')) # Prefer raw_data, fallback to column
+            
+            print(f"Extracted area_m2: {listing['area_m2']} for URL: {listing.get('url')}") # Log extracted area
+        except (json.JSONDecodeError, TypeError) as e: # Added TypeError for listing.get('raw_data') if it's not a string
+            print(f"Error decoding raw_data for listing {listing.get('url')}: {e}. Raw data: {listing.get('raw_data', '')[:200]}")
             listing['area_m2'] = 'N/A'
-            listing['price'] = 'N/A'  # Domyślna wartość dla ceny
+            listing['price'] = listing.get('price', 'N/A') # Fallback to column price if raw_data fails
+            listing['description'] = listing.get('description', 'N/A') # Fallback to column description
         listings.append(listing)
     
     return listings
