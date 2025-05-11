@@ -277,9 +277,16 @@ class DomiportaScraper(BaseScraper):
                 description_parts.append("\nCechy dodatkowe:\n" + "\n".join(features_text_parts))
         
         if description_parts:
-            full_description = "\n\n".join(filter(None, description_parts)) # Join parts, filter out empty ones
-            details['description'] = full_description[:1000] + '...' if len(full_description) > 1000 else full_description
+            # Filtruj części, które są None, puste lub składają się tylko z białych znaków
+            valid_description_parts = [part for part in description_parts if part and part.strip()]
+            if valid_description_parts:
+                full_description = "\n\n".join(valid_description_parts)
+                details['description'] = full_description[:1000] + '...' if len(full_description) > 1000 else full_description
+            else:
+                # Jeśli po odfiltrowaniu nie ma żadnych wartościowych części opisu
+                details['description'] = 'N/A'
         else:
+            # Jeśli lista description_parts była pusta od początku
             details['description'] = 'N/A'
 
 
