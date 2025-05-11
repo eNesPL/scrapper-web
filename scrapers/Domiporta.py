@@ -142,28 +142,34 @@ class DomiportaScraper(BaseScraper):
         details['price'] = price_tag.get_text(strip=True).replace('\xa0', ' ') if price_tag else 'N/A'
 
         # Area
-        area_text = 'N/A'
+        area_text = None  # Initialize as None to distinguish from an empty string found
         
         # Try to find by 'features-short__value-quadric' first
         area_quadric_span = soup.find('span', class_='features-short__value-quadric')
         if area_quadric_span:
-            area_text = area_quadric_span.get_text(strip=True).replace('\xa0', ' ')
+            extracted_value = area_quadric_span.get_text(strip=True).replace('\xa0', ' ')
+            if extracted_value:  # Only use if non-empty
+                area_text = extracted_value
 
-        if area_text == 'N/A':
-            # Try new format if 'features-short__value-quadric' not found
+        if area_text is None:
+            # Try new format if 'features-short__value-quadric' not found or was empty
             area_name_span = soup.find('span', class_='features__item_name', string='Powierzchnia całkowita')
             if area_name_span:
                 area_value_span = area_name_span.find_next_sibling('span', class_='features__item_value')
                 if area_value_span:
-                    area_text = area_value_span.get_text(strip=True).replace('\xa0', ' ')
+                    extracted_value = area_value_span.get_text(strip=True).replace('\xa0', ' ')
+                    if extracted_value:  # Only use if non-empty
+                        area_text = extracted_value
         
-        if area_text == 'N/A':
-            # Fallback to old format if other methods fail
+        if area_text is None:
+            # Fallback to old format if other methods fail or returned empty
             area_tag = soup.find('div', class_='paramIconFloorArea')
             if area_tag:
-                area_text = area_tag.get_text(strip=True).replace('\xa0', ' ')
+                extracted_value = area_tag.get_text(strip=True).replace('\xa0', ' ')
+                if extracted_value:  # Only use if non-empty
+                    area_text = extracted_value
         
-        details['area_m2'] = area_text
+        details['area_m2'] = area_text if area_text is not None else 'N/A'
 
         # Description
         description_div = soup.find('div', class_='description')
