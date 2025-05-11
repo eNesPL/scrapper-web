@@ -144,20 +144,42 @@ class DomiportaScraper(BaseScraper):
         # Area
         area_text = None
 
-        # Method 1: Try to find by 'features-short__value-quadric' (often a <p> tag with the value)
-        # Example: <p class="features-short__value-quadric">70 m²</p> or <p class="features-short__value-quadric">27,19 m<sup>2</sup></p>
-        area_quadric_p_tag = soup.find('p', class_='features-short__value-quadric')
-        if area_quadric_p_tag:
-            # Handle potential <sup> tag within the area value
-            for sup_tag in area_quadric_p_tag.find_all('sup'):
-                sup_tag.unwrap() # Replaces <sup> tag with its content
+        # Method 1: Find the label "POWIERZCHNIA" and then its corresponding value.
+        # This is inspired by the structure often found, like:
+        # <div>
+        #   <p class="features-short__name">POWIERZCHNIA</p>
+        #   <p class="features-short__value-quadric">27,19 m<sup>2</sup></p>
+        # </div>
+        area_label_tag = soup.find('p', class_='features-short__name', string=lambda t: t and 'POWIERZCHNIA' in t.strip())
+        if area_label_tag:
+            area_value_tag = area_label_tag.find_next_sibling('p')
+            if area_value_tag:
+                # Handle potential <sup> tag within the area value
+                for sup_tag in area_value_tag.find_all('sup'):
+                    sup_tag.unwrap() # Replaces <sup> tag with its content
 
-            extracted_value = area_quadric_p_tag.get_text(strip=True).replace('\xa0', ' ')
-            if extracted_value and any(char.isdigit() for char in extracted_value):
-                # Further check: avoid accepting just "m2" or "m²"
-                temp_check_val = extracted_value.lower().replace(' ', '').replace(',', '.') # Normalize comma to dot for "m2" check
-                if not (temp_check_val == 'm2' or temp_check_val == 'm²'):
-                    area_text = extracted_value
+                extracted_value = area_value_tag.get_text(strip=True).replace('\xa0', ' ')
+                if extracted_value and any(char.isdigit() for char in extracted_value):
+                    # Further check: avoid accepting just "m2" or "m²"
+                    temp_check_val = extracted_value.lower().replace(' ', '').replace(',', '.') # Normalize comma to dot
+                    if not (temp_check_val == 'm2' or temp_check_val == 'm²'):
+                        area_text = extracted_value
+            else:
+                print(f"[{self.site_name}] Found area label but no sibling 'p' tag for value.")
+        else:
+            # Fallback: if the label-based approach fails, try finding by 'features-short__value-quadric' directly
+            # This might be useful if the "POWIERZCHNIA" label is missing or different, but the value tag is present.
+            print(f"[{self.site_name}] Area label 'POWIERZCHNIA' not found with class 'features-short__name'. Trying direct find for value.")
+            area_quadric_p_tag = soup.find('p', class_='features-short__value-quadric')
+            if area_quadric_p_tag:
+                for sup_tag in area_quadric_p_tag.find_all('sup'):
+                    sup_tag.unwrap()
+                extracted_value = area_quadric_p_tag.get_text(strip=True).replace('\xa0', ' ')
+                if extracted_value and any(char.isdigit() for char in extracted_value):
+                    temp_check_val = extracted_value.lower().replace(' ', '').replace(',', '.')
+                    if not (temp_check_val == 'm2' or temp_check_val == 'm²'):
+                        area_text = extracted_value
+
 
         # Method 2: Try list/span format (e.g., features__item_name / features__item_value)
         # Example: <span class="features__item_name">Powierzchnia</span> <span class="features__item_value">55 m²</span>
