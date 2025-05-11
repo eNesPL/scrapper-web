@@ -430,6 +430,52 @@ class DomiportaScraper(BaseScraper):
                 details['image_count'] = 0
         print(f"[{self.site_name}] Image count: {details['image_count']}")
 
+        # First image URL from details page
+        details['first_image_url'] = None
+        # Try to find the main image in a gallery container
+        gallery_big_photo_container = soup.find(class_=['gallery__big-photo-container', 'photo-container']) # Common classes for main image
+        if gallery_big_photo_container:
+            img_tag = gallery_big_photo_container.find('img')
+            if img_tag and img_tag.get('src'):
+                details['first_image_url'] = img_tag['src']
+                print(f"[{self.site_name}] Found first_image_url in gallery__big-photo-container: {details['first_image_url']}")
+
+        # Fallback if not found in the primary gallery container, try js-gallery__container (used for count)
+        if not details['first_image_url'] and gallery_container: # gallery_container is from image_count section
+            img_tag = gallery_container.find('img') # First image in this container
+            if img_tag and img_tag.get('src'):
+                details['first_image_url'] = img_tag['src']
+                print(f"[{self.site_name}] Found first_image_url in js-gallery__container: {details['first_image_url']}")
+        
+        # Fallback to any prominent image if specific containers fail
+        if not details['first_image_url']:
+            # Look for an image within an element that might be a main image wrapper
+            # e.g., a div with class 'photo' or 'image' or an article tag
+            main_content_areas = soup.find_all(['article', 'div'], class_=['photo', 'image', 'gallery', 'slick-current', 'fotorama__active'], limit=5)
+            for area in main_content_areas:
+                img_tag = area.find('img')
+                if img_tag and img_tag.get('src'):
+                    # Avoid tiny icons by checking for typical data-src or larger src if possible
+                    # This is a heuristic; actual image size/relevance check is complex without rendering
+                    src_val = img_tag.get('data-src', img_tag.get('src'))
+                    if src_val: # Ensure src_val is not None
+                        details['first_image_url'] = src_val
+                        print(f"[{self.site_name}] Found first_image_url in a fallback area: {details['first_image_url']}")
+                        break # Found one, stop searching
+
+        if details.get('first_image_url') and details['first_image_url'].startswith('//'):
+            details['first_image_url'] = f"https:{details['first_image_url']}"
+        elif details.get('first_image_url') and not details['first_image_url'].startswith('http'):
+            # Assuming it's a relative path, prepend base_url if available
+            # This part needs self.base_url to be set correctly for the site
+            # For Domiporta, base_url is set in fetch_listings_page.
+            # If parse_listing_details is called independently, this might need adjustment.
+            if hasattr(self, 'base_url') and self.base_url:
+                 details['first_image_url'] = f"{self.base_url}{details['first_image_url'] if details['first_image_url'].startswith('/') else '/' + details['first_image_url']}"
+                 print(f"[{self.site_name}] Prepended base_url to relative first_image_url: {details['first_image_url']}")
+            else:
+                print(f"[{self.site_name}] Warning: first_image_url is relative but self.base_url is not available. Path: {details['first_image_url']}")
+
 
         # Additional details
         details_table = soup.find('table', class_='parameters')
