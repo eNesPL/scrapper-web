@@ -298,13 +298,19 @@ class AdresowoScraper(BaseScraper):
         area_text = 'N/A'
         print(f"[{self.site_name}] Starting area parsing...")
         
-        # Szukaj diva zawierającego tekst 'Powierzchnia'
-        area_container = soup.find('div', string=lambda t: t and 'Powierzchnia' in t)
-        if area_container:
-            print(f"[{self.site_name}] Found area container: {str(area_container)[:100]}...")
+        # Szukaj kontenera z danymi technicznymi
+        summary_container = soup.find('div', class_='offer-summary__item1')
+        if summary_container:
+            # Szukaj sekcji z powierzchnią w kontenerze
+            area_section = summary_container.find('div', string=lambda t: t and 'Powierzchnia' in t)
+            if not area_section:
+                print(f"[{self.site_name}] No area section in summary container")
+                return details
+            
+            print(f"[{self.site_name}] Found area section: {str(area_section)[:100]}...")
             
             # Znajdź span z wartością i tekst po spanie
-            area_span = area_container.find('span', class_='offer-summary__value')
+            area_span = area_section.find('span', class_='offer-summary__value')
             if area_span:
                 area_value = area_span.get_text(strip=True)
                 print(f"[{self.site_name}] Found area value: {area_value}")
@@ -316,7 +322,7 @@ class AdresowoScraper(BaseScraper):
             else:
                 print(f"[{self.site_name}] No area span found in container")
         else:
-            print(f"[{self.site_name}] No area container found")
+            print(f"[{self.site_name}] No summary container found")
 
         print(f"[{self.site_name}] Preliminary area: {area_text}")
 
