@@ -305,14 +305,17 @@ class LentoScraper(BaseScraper):
 
         details_section = soup.find('div', class_='oglDetails') # Lento uses this class for details block
         if details_section:
+            print(f"[{self.site_name}] Found 'oglDetails' section.")
             details_list_items = details_section.find_all('li')
             if not details_list_items: # Sometimes it's divs instead of li
                 details_list_items = details_section.find_all('div', class_=lambda x: x and x.startswith('param param-'))
+            print(f"[{self.site_name}] Found {len(details_list_items)} items in 'oglDetails' section.")
 
             section_details_text = []
-            for item in details_list_items:
+            for item_idx, item in enumerate(details_list_items):
                 item_text = item.get_text(strip=True)
                 if item_text:
+                    print(f"[{self.site_name}] oglDetails item #{item_idx}: '{item_text[:100]}'")
                     section_details_text.append(item_text)
                     # Fallback for area if XPath failed
                     if details['area_m2'] == 'N/A' and 'Powierzchnia:' in item_text:
@@ -324,6 +327,10 @@ class LentoScraper(BaseScraper):
                 # Keep section_details_text as a list of strings for better formatting later
                 description_parts.append("Szczegóły ogłoszenia:")
                 description_parts.extend(section_details_text) # Add each item as a new element
+            else:
+                print(f"[{self.site_name}] No text items extracted from 'oglDetails' section.")
+        else:
+            print(f"[{self.site_name}] 'oglDetails' section not found.")
         
         if details['area_m2'] == 'N/A': # Final fallback if not found in oglDetails list items
             print(f"[{self.site_name}] Area not found by XPath or in oglDetails list. Current value: {details['area_m2']}")
@@ -334,14 +341,24 @@ class LentoScraper(BaseScraper):
         # "Opis oferty"
         description_header = soup.find('h3', string=re.compile(r'Opis oferty', re.IGNORECASE))
         if description_header:
+            print(f"[{self.site_name}] Found 'Opis oferty' header.")
             description_content_div = description_header.find_next_sibling('div', class_='description')
             if not description_content_div: # Fallback if class is not 'description'
+                 print(f"[{self.site_name}] 'Opis oferty' content div with class 'description' not found, trying generic next div.")
                  description_content_div = description_header.find_next_sibling('div')
 
             if description_content_div:
+                print(f"[{self.site_name}] Found content div for 'Opis oferty'.")
                 main_description_text = description_content_div.get_text(separator='\n', strip=True)
                 if main_description_text:
+                    print(f"[{self.site_name}] Extracted main description text. Length: {len(main_description_text)}, Preview: '{main_description_text[:100]}'")
                     description_parts.append("\nOpis główny:\n" + main_description_text) # Changed label for clarity
+                else:
+                    print(f"[{self.site_name}] 'Opis oferty' content div found, but no text extracted.")
+            else:
+                print(f"[{self.site_name}] Content div for 'Opis oferty' not found after header.")
+        else:
+            print(f"[{self.site_name}] 'Opis oferty' header not found.")
 
         # Add content from specific XPath to description - REMOVED AS PER USER REQUEST
         # if lxml_html and html_content:
