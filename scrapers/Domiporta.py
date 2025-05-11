@@ -142,33 +142,52 @@ class DomiportaScraper(BaseScraper):
         details['price'] = price_tag.get_text(strip=True).replace('\xa0', ' ') if price_tag else 'N/A'
 
         # Area
-        area_text = None  # Initialize as None to distinguish from an empty string found
-        
-        # Try to find by 'features-short__value-quadric' (which is a <p> tag)
+        area_text = None
+
+        # Method 1: Try to find by 'features-short__value-quadric' (often a <p> tag with the value)
+        # Example: <p class="features-short__value-quadric">70 m²</p>
         area_quadric_p_tag = soup.find('p', class_='features-short__value-quadric')
         if area_quadric_p_tag:
             extracted_value = area_quadric_p_tag.get_text(strip=True).replace('\xa0', ' ')
-            if extracted_value:  # Only use if non-empty
+            if extracted_value and any(char.isdigit() for char in extracted_value):
                 area_text = extracted_value
 
+        # Method 2: Try list/span format (e.g., features__item_name / features__item_value)
+        # Example: <span class="features__item_name">Powierzchnia</span> <span class="features__item_value">55 m²</span>
         if area_text is None:
-            # Try list/span format if 'features-short__value-quadric' (or other prior methods) not found or was empty
-            # Look for the <span> tag with "Powierzchnia całkowita"
-            area_name_span = soup.find('span', class_='features__item_name', string=lambda t: t and 'Powierzchnia całkowita' in t.strip())
+            # Look for a span containing "Powierzchnia" (more generic than "Powierzchnia całkowita")
+            area_name_span = soup.find('span', class_='features__item_name', string=lambda t: t and 'Powierzchnia' in t.strip())
             if area_name_span:
-                # The value is in the next <span> sibling with class 'features__item_value'
                 area_value_span = area_name_span.find_next_sibling('span', class_='features__item_value')
                 if area_value_span:
                     extracted_value = area_value_span.get_text(strip=True).replace('\xa0', ' ')
-                    if extracted_value:  # Only use if non-empty
+                    if extracted_value and any(char.isdigit() for char in extracted_value):
                         area_text = extracted_value
         
+        # Method 3: Try common semantic HTML for key-value pairs (dt/dd, th/td)
         if area_text is None:
-            # Fallback to old format if other methods fail or returned empty
+            # Search for <dt>Termin</dt> <dd>Definicja</dd> or <th>Nagłówek</th> <td>Dane</td>
+            # Find label elements (dt, th) containing "Powierzchnia"
+            label_elements = soup.find_all(['dt', 'th'], string=lambda t: t and 'Powierzchnia' in t.strip())
+            for label_element in label_elements:
+                value_element = None
+                if label_element.name == 'dt':
+                    value_element = label_element.find_next_sibling('dd')
+                elif label_element.name == 'th':
+                    value_element = label_element.find_next_sibling('td')
+                
+                if value_element:
+                    extracted_value = value_element.get_text(strip=True).replace('\xa0', ' ')
+                    if extracted_value and any(char.isdigit() for char in extracted_value):
+                        area_text = extracted_value
+                        break # Found a plausible value from a key-value pair
+        
+        # Method 4: Fallback to 'paramIconFloorArea' (more common on listing cards than detail pages)
+        if area_text is None:
             area_tag = soup.find('div', class_='paramIconFloorArea')
             if area_tag:
                 extracted_value = area_tag.get_text(strip=True).replace('\xa0', ' ')
-                if extracted_value:  # Only use if non-empty
+                if extracted_value and any(char.isdigit() for char in extracted_value):
                     area_text = extracted_value
         
         details['area_m2'] = area_text if area_text is not None else 'N/A'
