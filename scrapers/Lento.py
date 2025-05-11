@@ -1,6 +1,10 @@
 import requests
 from bs4 import BeautifulSoup
 import re # For extracting area
+try:
+    from lxml import html as lxml_html
+except ImportError:
+    lxml_html = None
 
 from .base_scraper import BaseScraper
 # import datetime # If you need to use datetime objects
