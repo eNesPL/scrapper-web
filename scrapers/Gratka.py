@@ -174,12 +174,9 @@ class GratkaScraper(BaseScraper):
 
             try:
                 # Area
-                area_elements = lxml_tree.xpath('/html/body/div[1]/div[2]/main/div[1]/div[4]/section/div/div[1]/div/span[1]')
+                area_elements = lxml_tree.xpath('/html/body/div[1]/div[2]/main/div[1]/div[4]/section/div/div[2]/span[2]/span')
                 if area_elements:
                     details['area_m2'] = area_elements[0].text_content().strip()
-                    # It seems this XPath might actually be for price based on its structure,
-                    # but following user's direct instruction to use it for area.
-                    # If it extracts price, the user might provide a different XPath for area later.
                     print(f"[{self.site_name}] Area (XPath): {details['area_m2']}")
             except Exception as e:
                 print(f"[{self.site_name}] Error extracting area with XPath: {e}")
