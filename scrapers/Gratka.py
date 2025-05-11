@@ -244,32 +244,84 @@ class GratkaScraper(BaseScraper):
             full_description = "\n\n".join(filter(None, description_parts))
             details['description'] = full_description[:1000] + '...' if len(full_description) > 1000 else full_description
         
-        # Image count (example: count images in a gallery)
-        gallery_element = soup.find('div', class_='gallery') # Adjust selector as needed
-        if gallery_element:
-            details['image_count'] = len(gallery_element.find_all('img'))
-        else: # Fallback: count all images with src attribute in main content area
-            main_content = soup.find('main') # Or a more specific container
+        # Image count
+        # Try to find a specific gallery container
+        # Common classes for main gallery on Gratka: galleryDesktop__container, galleryViewer, listingGallery
+        gallery_container = soup.find('div', class_=['galleryDesktop__container', 'galleryViewer', 'listingGallery'])
+        if gallery_container:
+            # Count images directly within this specific gallery container
+            images_in_gallery = gallery_container.find_all('img', src=True)
+            details['image_count'] = len(images_in_gallery)
+            print(f"[{self.site_name}] Image count (gallery container): {details['image_count']}")
+            
+            # First image URL from the identified gallery container
+            if images_in_gallery:
+                img_src = images_in_gallery[0].get('src')
+                if img_src:
+                    if not img_src.startswith('http'):
+                        details['first_image_url'] = f"{self.base_url}{img_src if img_src.startswith('/') else '/' + img_src}"
+                    else:
+                        details['first_image_url'] = img_src
+        else:
+            # Fallback if specific gallery container is not found - try to count images in main content
+            # This is less precise and might overcount.
+            main_content = soup.find('main') 
             if main_content:
-                details['image_count'] = len(main_content.find_all('img', src=True))
-        print(f"[{self.site_name}] Image count (BeautifulSoup): {details['image_count']}")
-
-        # First image URL (example: first image in gallery or a prominent image)
-        first_img_tag = None
-        if gallery_element:
-            first_img_tag = gallery_element.find('img', src=True)
-        if not first_img_tag and main_content: # Fallback
-             first_img_tag = main_content.find('img', src=True)
+                all_images_in_main = main_content.find_all('img', src=True)
+                details['image_count'] = len(all_images_in_main)
+                # Try to get the first image from main content as a fallback
+                if all_images_in_main and not details['first_image_url']:
+                    img_src = all_images_in_main[0].get('src')
+                    if img_src:
+                        if not img_src.startswith('http'):
+                             details['first_image_url'] = f"{self.base_url}{img_src if img_src.startswith('/') else '/' + img_src}"
+                        else:
+                            details['first_image_url'] = img_src
+            print(f"[{self.site_name}] Image count (fallback - main content): {details['image_count']}")
         
-        if first_img_tag:
-            img_src = first_img_tag.get('src')
-            if img_src:
-                if not img_src.startswith('http'):
-                    details['first_image_url'] = f"{self.base_url}{img_src if img_src.startswith('/') else '/' + img_src}"
-                else:
-                    details['first_image_url'] = img_src
         print(f"[{self.site_name}] First image URL (BeautifulSoup): {details['first_image_url']}")
 
+
+        # --- Attempt to extract Area using BeautifulSoup as a fallback or primary if XPath failed ---
+        if details['area_m2'] == 'N/A' or not lxml_tree: # If XPath failed or lxml not available
+            print(f"[{self.site_name}] Attempting to extract area using BeautifulSoup.")
+            # Common pattern: parameters are often in a list or divs.
+            # Look for a span/div containing "m²" or near a label "Powierzchnia"
+            # This is a generic example, Gratka's structure might vary.
+            # Example: <div class="parameters__value"><span>55 m²</span></div>
+            # Example: <li><span>Powierzchnia</span><span>55 m²</span></li>
+            
+            # Try finding a parameter list/section first
+            parameters_section = soup.find('div', class_=['parameters', 'listingAttributes', 'details_param', 'summaryTable']) # Common class names, added summaryTable
+            if parameters_section:
+                # Try to find a label "Powierzchnia" and get its value
+                area_label_tag = parameters_section.find(lambda tag: tag.name in ['span', 'div', 'dt', 'th'] and "Powierzchnia" in tag.get_text() and "całkowita" not in tag.get_text()) # Avoid "Powierzchnia całkowita" if it's different
+                if area_label_tag:
+                    value_tag = area_label_tag.find_next_sibling(['span', 'div', 'dd', 'td'])
+                    if value_tag and "m²" in value_tag.get_text():
+                        area_text_bs = value_tag.get_text(strip=True)
+                        details['area_m2'] = area_text_bs
+                        print(f"[{self.site_name}] Area (BeautifulSoup - label 'Powierzchnia'): {details['area_m2']}")
+
+                # If label search fails, try direct search for "m²" within the section
+                if details['area_m2'] == 'N/A':
+                    area_tag_bs = parameters_section.find(lambda tag: tag.name in ['span', 'div', 'li', 'dd', 'td'] and "m²" in tag.get_text() and "Cena za m²" not in tag.get_text())
+                    if area_tag_bs:
+                        area_text_bs = area_tag_bs.get_text(strip=True)
+                        if ":" in area_text_bs: # Simple cleaning if it's like "Label: Value"
+                            area_text_bs = area_text_bs.split(":")[-1].strip()
+                        details['area_m2'] = area_text_bs
+                        print(f"[{self.site_name}] Area (BeautifulSoup - parameters section, m² search): {details['area_m2']}")
+            
+            if details['area_m2'] == 'N/A': # If still not found, try a more general page-wide search for text with m²
+                area_tag_direct = soup.find(lambda tag: tag.name in ['span', 'div'] and "m²" in tag.get_text() and "Cena za m²" not in tag.get_text() and len(tag.get_text(strip=True)) < 30 and len(tag.find_all()) < 3) # Avoid long description texts and complex tags
+                if area_tag_direct:
+                    area_text_direct = area_tag_direct.get_text(strip=True)
+                    if ":" in area_text_direct: 
+                        area_text_direct = area_text_direct.split(":")[-1].strip()
+                    details['area_m2'] = area_text_direct
+                    print(f"[{self.site_name}] Area (BeautifulSoup - direct page m² search): {details['area_m2']}")
+        
         # Ensure essential fields are not None before returning, as per BaseScraper expectations
         details.setdefault('title', 'N/A')
         details.setdefault('price', 'N/A')
