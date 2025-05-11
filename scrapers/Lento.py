@@ -251,22 +251,38 @@ class LentoScraper(BaseScraper):
 
 
         # Price
-        price_div = soup.find('div', class_='price') # Main price display
-        if price_div:
-            price_strong = price_div.find('strong')
-            if price_strong:
-                details['price'] = price_strong.get_text(strip=True)
-        if details['price'] == 'N/A': # Fallback from details section
-            details_section_price = soup.find('div', class_='oglDetails')
-            if details_section_price:
-                price_item = details_section_price.find(lambda tag: tag.name == 'li' and 'Cena:' in tag.get_text())
-                if price_item:
-                    price_text_content = price_item.get_text(strip=True)
-                    # Extract price after "Cena:"
-                    match = re.search(r'Cena:\s*([\d\s]+zł)', price_text_content)
-                    if match:
-                        details['price'] = match.group(1).strip()
-        print(f"[{self.site_name}] Price: {details['price']}")
+        if lxml_html and html_content: # Ensure lxml is available and html_content is not None
+            try:
+                # Assuming tree was already parsed for title or will be parsed if not
+                if 'tree' not in locals() or tree is None: # Check if tree exists from title parsing
+                    tree = lxml_html.fromstring(html_content)
+                
+                price_elements = tree.xpath('/html/body/main/div[2]/div[2]/div/div/div[1]/div[2]/div[1]/div[1]')
+                if price_elements:
+                    details['price'] = price_elements[0].text_content().strip()
+                    print(f"[{self.site_name}] Price (XPath): {details['price']}")
+            except Exception as e:
+                print(f"[{self.site_name}] Error extracting price with XPath: {e}. Falling back to BeautifulSoup.")
+
+        if details['price'] == 'N/A': # Fallback to BeautifulSoup if XPath failed or lxml not available
+            price_div_bs = soup.find('div', class_='price') # Main price display
+            if price_div_bs:
+                price_strong_bs = price_div_bs.find('strong')
+                if price_strong_bs:
+                    details['price'] = price_strong_bs.get_text(strip=True)
+            if details['price'] == 'N/A': # Fallback from details section
+                details_section_price_bs = soup.find('div', class_='oglDetails')
+                if details_section_price_bs:
+                    price_item_bs = details_section_price_bs.find(lambda tag: tag.name == 'li' and 'Cena:' in tag.get_text())
+                    if price_item_bs:
+                        price_text_content_bs = price_item_bs.get_text(strip=True)
+                        match_bs = re.search(r'Cena:\s*([\d\s]+zł)', price_text_content_bs)
+                        if match_bs:
+                            details['price'] = match_bs.group(1).strip()
+            print(f"[{self.site_name}] Price (BeautifulSoup fallback): {details['price']}")
+        else: # If price was found by XPath
+            print(f"[{self.site_name}] Price successfully extracted by XPath: {details['price']}")
+
 
         # Description and other details from "Szczegóły ogłoszenia" and "Opis oferty"
         description_parts = []
