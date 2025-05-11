@@ -56,7 +56,7 @@ class MorizonScraper(BaseScraper):
         # Common selectors for listing items on Morizon
         # User confirmed that listings are <article class="mz-card">
         
-        listing_elements = soup.find_all('article', class_='mz-card')
+        listing_elements = soup.find_all('div', class_='card')
         
         if not listing_elements:
             print(f"[{self.site_name}] No elements with selector 'article.mz-card' found.")
