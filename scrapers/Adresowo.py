@@ -296,19 +296,32 @@ class AdresowoScraper(BaseScraper):
 
         # Area (m2)
         area_text = 'N/A'
+        print(f"[{self.site_name}] Starting area parsing...")
+        
         # Szukaj diva zawierającego tekst 'Powierzchnia'
         area_container = soup.find('div', string=lambda t: t and 'Powierzchnia' in t)
         if area_container:
+            print(f"[{self.site_name}] Found area container: {str(area_container)[:100]}...")
+            
             # Znajdź span z wartością i tekst po spanie
             area_span = area_container.find('span', class_='offer-summary__value')
             if area_span:
                 area_value = area_span.get_text(strip=True)
+                print(f"[{self.site_name}] Found area value: {area_value}")
+                
                 unit = area_span.next_sibling.strip() if area_span.next_sibling else 'm²'
+                print(f"[{self.site_name}] Detected unit: '{unit}'")
+                
                 area_text = f"{area_value} {unit}"
-        
+            else:
+                print(f"[{self.site_name}] No area span found in container")
+        else:
+            print(f"[{self.site_name}] No area container found")
+
+        print(f"[{self.site_name}] Preliminary area: {area_text}")
 
         # Final Fallback: try to extract from description if not found in dedicated field and still N/A
-        if area_text == 'N/A': # Check only if area_text is still 'N/A'
+        if area_text == 'N/A':
             # Ensure details['description'] exists and is not 'N/A' before searching
             description_content = details.get('description')
             if description_content and description_content != 'N/A':
@@ -385,5 +398,9 @@ class AdresowoScraper(BaseScraper):
                                 details['first_image_url'] = self.base_url + '/' + details['first_image_url']
                         break
 
-        print(f"[{self.site_name}] Parsed details: Title='{details.get('title', 'N/A')[:30]}...', Price='{details.get('price', 'N/A')}', ImgCount={details.get('image_count', 0)}")
+        print(f"[{self.site_name}] Parsed details: Title='{details.get('title', 'N/A')[:30]}...', "
+              f"Price='{details.get('price', 'N/A')}', "
+              f"Area='{details.get('area_m2', 'N/A')}', "
+              f"ImgCount={details.get('image_count', 0)}, "
+              f"DescChars={len(details.get('description', ''))}")
         return details
