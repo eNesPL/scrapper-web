@@ -253,12 +253,35 @@ class DomiportaScraper(BaseScraper):
         details['area_m2'] = area_text if area_text is not None else 'N/A'
 
         # Description
+        description_parts = []
         description_div = soup.find('div', class_='description')
         if description_div:
-            description = ' '.join([p.get_text(strip=True) for p in description_div.find_all('p')])
-            details['description'] = description[:500] + '...' if len(description) > 500 else description
+            main_description = ' '.join([p.get_text(strip=True) for p in description_div.find_all('p')])
+            description_parts.append(main_description)
+
+        # Extract features from 'features__container' and append to description
+        features_container = soup.find(class_='features__container')
+        if features_container:
+            features_text_parts = []
+            # Iterate over items, typically divs with class 'features__item'
+            for item in features_container.find_all(class_='features__item'):
+                name_tag = item.find(class_='features__item_name')
+                value_tag = item.find(class_='features__item_value')
+                if name_tag and value_tag:
+                    name = name_tag.get_text(strip=True)
+                    value = value_tag.get_text(strip=True)
+                    if name and value: # Ensure both name and value are present
+                        features_text_parts.append(f"{name}: {value}")
+            
+            if features_text_parts:
+                description_parts.append("\nCechy dodatkowe:\n" + "\n".join(features_text_parts))
+        
+        if description_parts:
+            full_description = "\n\n".join(filter(None, description_parts)) # Join parts, filter out empty ones
+            details['description'] = full_description[:1000] + '...' if len(full_description) > 1000 else full_description
         else:
             details['description'] = 'N/A'
+
 
         # Image count
         # Look for a container with class 'js-gallery__container'
