@@ -1,6 +1,8 @@
 # In a real scraper, you would import libraries like requests and BeautifulSoup:
 # import requests
 # from bs4 import BeautifulSoup
+import requests
+from bs4 import BeautifulSoup
 
 from .base_scraper import BaseScraper
 # import datetime # If you need to use datetime objects
