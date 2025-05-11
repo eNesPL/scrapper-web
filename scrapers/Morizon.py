@@ -251,6 +251,20 @@ class MorizonScraper(BaseScraper):
                 print(f"[{self.site_name}] Main description text found. Length: {len(main_desc_text)}")
 
         # Structured Details (mieszkanie, Budynek, Udogodnienia, Media)
+        # Area extraction via XPath first
+        if lxml_html and html_content:
+            try:
+                # Ensure tree is parsed, reuse if already parsed for title/price
+                if 'tree' not in locals() or tree is None:
+                    tree = lxml_html.fromstring(html_content)
+                
+                area_elements = tree.xpath('/html/body/div[1]/div[2]/main/div[1]/div[4]/section/div/div[2]/span[2]/span')
+                if area_elements:
+                    details['area_m2'] = area_elements[0].text_content().strip()
+                    print(f"[{self.site_name}] Area (XPath): {details['area_m2']}")
+            except Exception as e:
+                print(f"[{self.site_name}] Error extracting area with XPath: {e}. Falling back to BeautifulSoup.")
+
         sections_to_parse = {
             "mieszkanie": "Szczegóły mieszkania:",
             "Budynek": "Szczegóły budynku:",
@@ -280,13 +294,13 @@ class MorizonScraper(BaseScraper):
                             value = value_tag.get_text(strip=True)
                             current_section_details.append(f"{label}: {value}")
                             
-                            # Extract area_m2 specifically from "Pow. użytkowa"
-                            if "Pow. użytkowa" in label and details['area_m2'] == 'N/A':
+                            # Extract area_m2 specifically from "Pow. użytkowa" if XPath failed
+                            if details['area_m2'] == 'N/A' and "Pow. użytkowa" in label:
                                 details['area_m2'] = value
-                                print(f"[{self.site_name}] Area (Pow. użytkowa): {details['area_m2']}")
-                            elif "Pow. całkowita" in label and details['area_m2'] == 'N/A': # Fallback to całkowita
+                                print(f"[{self.site_name}] Area (BeautifulSoup - Pow. użytkowa): {details['area_m2']}")
+                            elif details['area_m2'] == 'N/A' and "Pow. całkowita" in label: # Fallback to całkowita
                                 details['area_m2'] = value
-                                print(f"[{self.site_name}] Area (Pow. całkowita - fallback): {details['area_m2']}")
+                                print(f"[{self.site_name}] Area (BeautifulSoup - Pow. całkowita - fallback): {details['area_m2']}")
                     
                     if current_section_details:
                         description_parts.append(f"\n{display_title}\n" + "\n".join(current_section_details))
