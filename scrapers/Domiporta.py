@@ -325,6 +325,24 @@ class DomiportaScraper(BaseScraper):
             else:
                 print(f"[{self.site_name}] Description element with class 'description__rolled' not found.")
 
+        # Method 5: class 'description' (generic fallback)
+        if not extracted_description_text:
+            description_div_generic_class = soup.find('div', class_='description')
+            if description_div_generic_class:
+                paragraphs = description_div_generic_class.find_all('p')
+                if paragraphs:
+                    extracted_description_text = "\n".join(p.get_text(strip=True) for p in paragraphs if p.get_text(strip=True))
+                else:
+                    extracted_description_text = description_div_generic_class.get_text(separator="\n", strip=True)
+
+                if extracted_description_text and extracted_description_text.strip():
+                    print(f"[{self.site_name}] Description found using generic class 'description'. Length: {len(extracted_description_text)}")
+                else:
+                    extracted_description_text = None # Reset if empty
+                    print(f"[{self.site_name}] Description generic 'description' element found, but no text content.")
+            else:
+                print(f"[{self.site_name}] Description element with generic class 'description' not found.")
+
         # Final assignment
         if extracted_description_text:
             details['description'] = extracted_description_text[:1000] + '...' if len(extracted_description_text) > 1000 else extracted_description_text
