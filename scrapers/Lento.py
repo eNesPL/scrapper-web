@@ -412,28 +412,51 @@ class LentoScraper(BaseScraper):
                 details['image_count'] = int(match.group(1))
         print(f"[{self.site_name}] Image count from indicator: {details['image_count']}")
 
-        # First image - Lento often uses a main image in a specific div or img tag
-        main_image_container = soup.find('div', class_=['photoview', 'main-photo', 'gallery-main-photo'])
-        if main_image_container:
-            img_tag = main_image_container.find('img')
-            if img_tag:
-                img_src = img_tag.get('src') or img_tag.get('data-src')
-                if img_src:
-                    if not img_src.startswith('http'):
-                        details['first_image_url'] = f"{self.base_url}{img_src if img_src.startswith('/') else '/' + img_src}"
-                    else:
-                        details['first_image_url'] = img_src
-        
-        if not details['first_image_url']: # Fallback if specific container not found
-            img_tag_general = soup.find('img', id='photoview_img') # Common ID for main image
-            if img_tag_general:
-                img_src = img_tag_general.get('src') or img_tag_general.get('data-src')
-                if img_src:
-                    if not img_src.startswith('http'):
-                        details['first_image_url'] = f"{self.base_url}{img_src if img_src.startswith('/') else '/' + img_src}"
-                    else:
-                        details['first_image_url'] = img_src
-        
+        # First image - Attempt with XPath first
+        if lxml_html and html_content:
+            try:
+                if 'tree' not in locals() or tree is None:
+                    tree = lxml_html.fromstring(html_content)
+                
+                image_elements = tree.xpath('/html/body/main/div[2]/div[2]/div/div/div[1]/div[1]/div[1]/div/div[3]/div/div[1]/div/picture/img')
+                if image_elements:
+                    img_src_xpath = image_elements[0].get('src')
+                    if img_src_xpath:
+                        details['first_image_url'] = img_src_xpath
+                        print(f"[{self.site_name}] First image URL (XPath): {details['first_image_url']}")
+                        # Normalize URL if needed
+                        if details['first_image_url'].startswith('//'):
+                            details['first_image_url'] = f"https:{details['first_image_url']}"
+                        elif not details['first_image_url'].startswith('http'):
+                            details['first_image_url'] = f"{self.base_url}{details['first_image_url'] if details['first_image_url'].startswith('/') else '/' + details['first_image_url']}"
+            except Exception as e:
+                print(f"[{self.site_name}] Error extracting first image URL with XPath: {e}. Falling back to BeautifulSoup.")
+
+        if not details['first_image_url']: # Fallback to BeautifulSoup if XPath failed or lxml not available
+            print(f"[{self.site_name}] First image URL not found by XPath, trying BeautifulSoup fallback.")
+            main_image_container_bs = soup.find('div', class_=['photoview', 'main-photo', 'gallery-main-photo'])
+            if main_image_container_bs:
+                img_tag_bs = main_image_container_bs.find('img')
+                if img_tag_bs:
+                    img_src_bs = img_tag_bs.get('src') or img_tag_bs.get('data-src')
+                    if img_src_bs:
+                        if not img_src_bs.startswith('http'):
+                            details['first_image_url'] = f"{self.base_url}{img_src_bs if img_src_bs.startswith('/') else '/' + img_src_bs}"
+                        else:
+                            details['first_image_url'] = img_src_bs
+            
+            if not details['first_image_url']: # Further fallback
+                img_tag_general_bs = soup.find('img', id='photoview_img') # Common ID for main image
+                if img_tag_general_bs:
+                    img_src_general_bs = img_tag_general_bs.get('src') or img_tag_general_bs.get('data-src')
+                    if img_src_general_bs:
+                        if not img_src_general_bs.startswith('http'):
+                            details['first_image_url'] = f"{self.base_url}{img_src_general_bs if img_src_general_bs.startswith('/') else '/' + img_src_general_bs}"
+                        else:
+                            details['first_image_url'] = img_src_general_bs
+            if details['first_image_url']:
+                 print(f"[{self.site_name}] First image URL (BeautifulSoup fallback): {details['first_image_url']}")
+
         # If image count is still 0 but we found a first_image_url, set count to at least 1
         if details['image_count'] == 0 and details['first_image_url']:
             details['image_count'] = 1
