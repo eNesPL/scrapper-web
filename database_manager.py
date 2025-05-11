@@ -64,6 +64,7 @@ class DatabaseManager:
             datetime.datetime.now(), # last_updated
             datetime.datetime.now()  # last_checked
         )
+        print(f"DB_MANAGER (add_listing): Data for raw_data: {data}")
 
         try:
             cursor.execute("""
@@ -98,6 +99,7 @@ class DatabaseManager:
         # Always update raw_data with the full update_data dictionary
         # This ensures all scraped fields, like area_m2, are stored.
         set_clauses.append("raw_data = ?")
+        print(f"DB_MANAGER (update_listing): Data for raw_data: {update_data}")
         values.append(json.dumps(update_data))
 
         # If only raw_data was set (e.g. no direct_column_fields were in update_data, which is unlikely but possible),
