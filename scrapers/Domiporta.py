@@ -62,25 +62,25 @@ class DomiportaScraper(BaseScraper):
             url = f"{self.base_url}{link_tag['href']}" if link_tag else 'N/A'
 
             # Extract title
-            title_tag = item.find('h2')
+            title_tag = item.find('h2') or item.find('span', class_='offer-item-title')
             title = title_tag.get_text(strip=True) if title_tag else 'N/A'
 
             # Extract price
-            price_tag = item.find('div', class_='price')
+            price_tag = item.find('div', class_='price') or item.find('span', class_='price')
             price = price_tag.get_text(strip=True).replace('\xa0', ' ') if price_tag else 'N/A'
 
             # Extract area and rooms
             details = {}
-            params = item.find_all('div', class_='param')
-            for param in params:
-                text = param.get_text(strip=True)
-                if 'm²' in text:
-                    details['area_m2'] = text
-                elif 'pokoi' in text:
-                    details['rooms'] = text.split()[0]
+            area_tag = item.find('div', class_='paramIconFloorArea')
+            if area_tag:
+                details['area_m2'] = area_tag.get_text(strip=True).replace('\xa0', ' ')
+                
+            rooms_tag = item.find('div', string=lambda t: t and 'Liczba pokoi' in t)
+            if rooms_tag:
+                details['rooms'] = rooms_tag.find_next_sibling('div').get_text(strip=True)
 
             # Extract first image URL
-            img_tag = item.find('img', src=True)
+            img_tag = item.find('img', class_='thumbnail__img')
             first_image_url = img_tag['src'] if img_tag else None
             if first_image_url and first_image_url.startswith('//'):
                 first_image_url = f"https:{first_image_url}"
