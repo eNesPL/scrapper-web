@@ -213,10 +213,27 @@ class MorizonScraper(BaseScraper):
 
 
         # Price
-        price_tag = soup.find('div', class_='summary__price')
-        if price_tag:
-            details['price'] = price_tag.get_text(strip=True)
-        print(f"[{self.site_name}] Price: {details['price']}")
+        if lxml_html and html_content:
+            try:
+                # Ensure tree is parsed, reuse if already parsed for title
+                if 'tree' not in locals() or tree is None:
+                    tree = lxml_html.fromstring(html_content)
+                
+                price_elements = tree.xpath('/html/body/div[1]/div[2]/main/div[1]/div[4]/section/div/div[1]/div/span[1]')
+                if price_elements:
+                    details['price'] = price_elements[0].text_content().strip()
+                    print(f"[{self.site_name}] Price (XPath): {details['price']}")
+            except Exception as e:
+                print(f"[{self.site_name}] Error extracting price with XPath: {e}. Falling back to BeautifulSoup.")
+
+        if details['price'] == 'N/A': # Fallback to BeautifulSoup if XPath failed or lxml not available
+            price_tag_bs = soup.find('div', class_='summary__price')
+            if price_tag_bs:
+                details['price'] = price_tag_bs.get_text(strip=True)
+            print(f"[{self.site_name}] Price (BeautifulSoup fallback): {details['price']}")
+        else: # If price was found by XPath
+            print(f"[{self.site_name}] Price successfully extracted by XPath: {details['price']}")
+
 
         description_parts = []
 
