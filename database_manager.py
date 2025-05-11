@@ -96,11 +96,15 @@ class DatabaseManager:
                 set_clauses.append(f"{field} = ?")
                 values.append(update_data[field])
         
-        # Always update raw_data with the full update_data dictionary
-        # This ensures all scraped fields, like area_m2, are stored.
-        set_clauses.append("raw_data = ?")
-        print(f"DB_MANAGER (update_listing): Data for raw_data: {update_data}")
-        values.append(json.dumps(update_data))
+        # Update raw_data column with the value from update_data['raw_data']
+        if 'raw_data' in update_data:
+            set_clauses.append("raw_data = ?")
+            # update_data['raw_data'] is expected to be the dictionary of all current listing details
+            print(f"DB_MANAGER (update_listing): Value for DB raw_data column from payload['raw_data']: {update_data['raw_data']}")
+            values.append(json.dumps(update_data['raw_data']))
+        else:
+            # This should ideally not happen if BaseScraper correctly prepares the payload
+            print(f"DB_MANAGER (update_listing): WARNING - 'raw_data' key not found in update_data for {url}. Raw_data DB column will not be updated.")
 
         # If only raw_data was set (e.g. no direct_column_fields were in update_data, which is unlikely but possible),
         # set_clauses would still not be empty.

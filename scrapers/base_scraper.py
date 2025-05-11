@@ -144,42 +144,48 @@ class BaseScraper(ABC):
                 print(f"[{self.site_name}] Added new listing to DB and sent notification: {listing_url}")
 
             else:
+                update_payload_for_db = {} # Initialize payload for DB update
                 changes_for_notification = []
-                update_payload_for_db = {}
 
-                # Fields that can be directly updated in the DB columns
+                # Fields that have dedicated columns and might trigger notifications
                 fields_to_check_for_update = ['title', 'price', 'description', 'image_count', 'first_image_url']
 
                 for field in fields_to_check_for_update:
                     old_value = existing_listing_row[field]
                     new_value = current_listing_data.get(field)
 
-                    if field == 'image_count':
+                    if field == 'image_count': # Specific handling for image_count type
                         try:
                             old_value = int(old_value) if old_value is not None else None
                             new_value = int(new_value) if new_value is not None else None
                         except (ValueError, TypeError):
-                            pass 
+                            pass # Keep original values if conversion fails
 
                     if old_value != new_value:
-                        update_payload_for_db[field] = new_value
+                        update_payload_for_db[field] = new_value # Add to DB payload if changed
                         if field in TRACKED_FIELDS_FOR_NOTIFICATION:
                             changes_for_notification.append((field, str(old_value)[:50], str(new_value)[:50]))
                 
-                if update_payload_for_db:
-                    print(f"[{self.site_name}] Detected DB updates for {listing_url}: {list(update_payload_for_db.keys())}")
-                    update_payload_for_db['raw_data'] = current_listing_data 
-                    self.db_manager.update_listing(listing_url, update_payload_for_db)
-                    
-                    if changes_for_notification:
-                        print(f"[{self.site_name}] Sending notification for changes: {changes_for_notification}")
-                        notif_embed = self.notification_manager.format_updated_listing_embed(current_listing_data, changes_for_notification)
-                        self.notification_manager.send_notification(embed=notif_embed)
-                    else:
-                         print(f"[{self.site_name}] Updated listing in DB (non-notified fields changed): {listing_url}")
-                else:
-                    self.db_manager.update_last_checked(listing_url)
-                    print(f"[{self.site_name}] No significant changes for {listing_url}. Updated last_checked time.")
+                # Always include the full current data for the raw_data field in the DB payload
+                update_payload_for_db['raw_data'] = current_listing_data 
+                
+                # Check if there were any changes to dedicated column fields
+                dedicated_fields_changed = any(field in update_payload_for_db for field in fields_to_check_for_update)
+
+                # Always call update_listing to ensure raw_data and timestamps are updated.
+                # The update_payload_for_db will contain specific fields if they changed,
+                # and always the full current_listing_data for the 'raw_data' key.
+                print(f"[{self.site_name}] Updating existing listing (or just timestamps/raw_data) for {listing_url}. Payload keys for dedicated columns: {[k for k in update_payload_for_db if k != 'raw_data']}")
+                self.db_manager.update_listing(listing_url, update_payload_for_db)
+                
+                if changes_for_notification:
+                    print(f"[{self.site_name}] Sending notification for changes: {changes_for_notification}")
+                    notif_embed = self.notification_manager.format_updated_listing_embed(current_listing_data, changes_for_notification)
+                    self.notification_manager.send_notification(embed=notif_embed)
+                elif dedicated_fields_changed: # Changes in dedicated columns, but not ones tracked for notification
+                     print(f"[{self.site_name}] Updated listing in DB (non-notified dedicated fields changed): {listing_url}")
+                else: # No changes in dedicated columns, so only raw_data might have changed, plus timestamps.
+                    print(f"[{self.site_name}] No changes in dedicated fields for {listing_url}. Ensured raw_data and timestamps are current.")
 
             processed_properties_data.append(current_listing_data)
         
