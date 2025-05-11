@@ -250,7 +250,6 @@ class MorizonScraper(BaseScraper):
                 description_parts.append(main_desc_text)
                 print(f"[{self.site_name}] Main description text found. Length: {len(main_desc_text)}")
 
-        # Structured Details (mieszkanie, Budynek, Udogodnienia, Media)
         # Area extraction via XPath first
         if lxml_html and html_content:
             try:
@@ -258,54 +257,74 @@ class MorizonScraper(BaseScraper):
                 if 'tree' not in locals() or tree is None:
                     tree = lxml_html.fromstring(html_content)
                 
+                # User provided XPath for area
                 area_elements = tree.xpath('/html/body/div[1]/div[2]/main/div[1]/div[4]/section/div/div[2]/span[2]/span')
                 if area_elements:
                     details['area_m2'] = area_elements[0].text_content().strip()
                     print(f"[{self.site_name}] Area (XPath): {details['area_m2']}")
             except Exception as e:
-                print(f"[{self.site_name}] Error extracting area with XPath: {e}. Falling back to BeautifulSoup.")
+                print(f"[{self.site_name}] Error extracting area with XPath: {e}. Falling back to BeautifulSoup if necessary.")
 
-        sections_to_parse = {
-            "mieszkanie": "Szczegóły mieszkania:",
-            "Budynek": "Szczegóły budynku:",
-            "Udogodnienia": "Udogodnienia:",
-            "Media": "Media:"
-        }
+        # Structured Details from div.FONERK (or similar) to be added to description
+        # This replaces the old sections_to_parse logic
+        fonerk_divs = soup.find_all('div', class_='FONERK') # Find all such containers
+        if not fonerk_divs: # Fallback if FONERK is too specific or dynamic
+            # Try to find sections based on h3 followed by divs with the characteristic item structure
+            # This is a more complex fallback, for now, we rely on FONERK or similar prominent class
+            # if user provides one for such sections.
+            # For the provided HTML, FONERK seems to be the key.
+            pass
 
-        for h3_text_key, display_title in sections_to_parse.items():
-            h3_tag = soup.find('h3', string=lambda t: t and h3_text_key.lower() in t.lower())
-            if h3_tag:
-                ul_tag = h3_tag.find_next_sibling('ul', class_='propertyDetails__list')
-                if not ul_tag: # Sometimes it's a div with params__dottedList
-                    ul_tag = h3_tag.find_next_sibling('div', class_='params__dottedList')
+        for fonerk_div in fonerk_divs:
+            section_title_tag = fonerk_div.find('h3', class_='gHM061')
+            section_title = section_title_tag.get_text(strip=True) if section_title_tag else "Szczegóły"
+            
+            current_section_details = [f"\n{section_title}:"] # Start with the section title
+            
+            item_divs = fonerk_div.find_all('div', class_='iT04N1')
+            for item_div in item_divs:
+                label_span = item_div.find('span', attrs={'data-v-96fcfdf3': True}) # More specific to the example
+                value_div = item_div.find('div', attrs={'data-cy': 'itemValue'})
+                
+                if label_span and value_div:
+                    label = label_span.get_text(strip=True)
+                    value = value_div.get_text(strip=True)
+                    current_section_details.append(f"{label}: {value}")
 
-                if ul_tag:
-                    current_section_details = []
-                    list_items = ul_tag.find_all('li', class_='propertyDetails__item') # for propertyDetails__list
-                    if not list_items: # for params__dottedList
-                        list_items = ul_tag.find_all('div', class_='params__dottedListItem')
-                    
-                    for item in list_items:
-                        label_tag = item.find(['span','div'], class_=['propertyDetails__label', 'params__label'])
-                        value_tag = item.find(['span','div'], class_=['propertyDetails__value', 'params__value'])
-                        
-                        if label_tag and value_tag:
-                            label = label_tag.get_text(strip=True)
-                            value = value_tag.get_text(strip=True)
-                            current_section_details.append(f"{label}: {value}")
-                            
-                            # Extract area_m2 specifically from "Pow. użytkowa" if XPath failed
-                            if details['area_m2'] == 'N/A' and "Pow. użytkowa" in label:
-                                details['area_m2'] = value
-                                print(f"[{self.site_name}] Area (BeautifulSoup - Pow. użytkowa): {details['area_m2']}")
-                            elif details['area_m2'] == 'N/A' and "Pow. całkowita" in label: # Fallback to całkowita
-                                details['area_m2'] = value
-                                print(f"[{self.site_name}] Area (BeautifulSoup - Pow. całkowita - fallback): {details['area_m2']}")
-                    
-                    if current_section_details:
-                        description_parts.append(f"\n{display_title}\n" + "\n".join(current_section_details))
-                        print(f"[{self.site_name}] Added structured details for: {display_title}")
+                    # Fallback for area_m2 if XPath failed and label is "Pow. całkowita" or "Pow. użytkowa"
+                    if details['area_m2'] == 'N/A':
+                        if "Pow. całkowita" in label or "Pow. użytkowa" in label:
+                            details['area_m2'] = value
+                            print(f"[{self.site_name}] Area (BeautifulSoup - from FONERK '{label}'): {details['area_m2']}")
+            
+            if len(current_section_details) > 1: # More than just the title
+                description_parts.extend(current_section_details)
+                print(f"[{self.site_name}] Added structured details from a FONERK section titled '{section_title}'.")
         
+        # Fallback for area_m2 if still not found (e.g. from old propertyDetails__list structure if it exists)
+        if details['area_m2'] == 'N/A':
+            old_style_sections_to_parse = { "mieszkanie": "Szczegóły mieszkania:"} # Only check 'mieszkanie' for old area
+            for h3_text_key, _ in old_style_sections_to_parse.items():
+                h3_tag = soup.find('h3', string=lambda t: t and h3_text_key.lower() in t.lower())
+                if h3_tag:
+                    ul_tag = h3_tag.find_next_sibling('ul', class_='propertyDetails__list')
+                    if ul_tag:
+                        list_items = ul_tag.find_all('li', class_='propertyDetails__item')
+                        for item in list_items:
+                            label_tag = item.find('span', class_='propertyDetails__label')
+                            value_tag = item.find('span', class_='propertyDetails__value')
+                            if label_tag and value_tag:
+                                label = label_tag.get_text(strip=True)
+                                value = value_tag.get_text(strip=True)
+                                if "Pow. użytkowa" in label:
+                                    details['area_m2'] = value
+                                    print(f"[{self.site_name}] Area (BS fallback - old propertyDetails 'Pow. użytkowa'): {details['area_m2']}")
+                                    break
+                                elif "Pow. całkowita" in label and details['area_m2'] == 'N/A':
+                                    details['area_m2'] = value
+                                    print(f"[{self.site_name}] Area (BS fallback - old propertyDetails 'Pow. całkowita'): {details['area_m2']}")
+                        if details['area_m2'] != 'N/A': break 
+
         if description_parts:
             full_description = "\n\n".join(filter(None, description_parts)).strip()
             details['description'] = full_description[:1000] + '...' if len(full_description) > 1000 else full_description
