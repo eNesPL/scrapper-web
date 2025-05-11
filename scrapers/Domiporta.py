@@ -21,18 +21,11 @@ class DomiportaScraper(BaseScraper):
     def fetch_listings_page(self, search_criteria):
         """
         Fetches the HTML content of the main listings page from Domiporta.pl.
-        :param search_criteria: dict, search parameters (e.g., location, property_type).
+        :param search_criteria: dict, search parameters (ignored as we use hardcoded URL).
         :return: HTML content (str) or None.
         """
         self.base_url = "https://www.domiporta.pl"
-        params = {
-            'Surface.From': search_criteria.get('min_area', 25),
-            'Price.To': search_criteria.get('max_price', 300000),
-            'Rooms.From': search_criteria.get('min_rooms', 2),
-            'Pietro.To': search_criteria.get('max_floor', 1)
-        }
-        
-        url = f"{self.base_url}/mieszkanie/sprzedam/slaskie/gliwice"
+        url = "https://www.domiporta.pl/mieszkanie/sprzedam/slaskie/gliwice?Surface.From=25&Price.To=300000&Rooms.From=2&Pietro.To=1"
         print(f"[{self.site_name}] Fetching listings page: {url}")
         
         try:
@@ -60,7 +53,7 @@ class DomiportaScraper(BaseScraper):
         soup = BeautifulSoup(html_content, 'html.parser')
         listings = []
         
-        listing_items = soup.find_all('section', class_='listing-item')
+        listing_items = soup.find_all('section', class_=lambda x: x and 'listing-item' in x.split())
         print(f"[{self.site_name}] Found {len(listing_items)} listing sections")
 
         for item in listing_items:
