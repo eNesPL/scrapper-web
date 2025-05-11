@@ -53,16 +53,18 @@ class DomiportaScraper(BaseScraper):
         soup = BeautifulSoup(html_content, 'html.parser')
         listings = []
         
-        listing_items = soup.find_all('section', class_=lambda x: x and 'listing-item' in x.split())
+        listing_items = soup.select('section.listing-item, div.listing-item')
         print(f"[{self.site_name}] Found {len(listing_items)} listing sections")
 
         for item in listing_items:
             # Extract URL
             link_tag = item.find('a', href=lambda href: href and '/nieruchomosci/' in href)
+            if not link_tag:
+                link_tag = item.find('a', class_='offer-item__link')  # Alternative selector
             url = f"{self.base_url}{link_tag['href']}" if link_tag else 'N/A'
 
             # Extract title
-            title_tag = item.find('h2') or item.find('span', class_='offer-item-title')
+            title_tag = item.find('h2') or item.find('a', class_='offer-item__link') or item.find('span', class_='offer-item-title')
             title = title_tag.get_text(strip=True) if title_tag else 'N/A'
 
             # Extract price
