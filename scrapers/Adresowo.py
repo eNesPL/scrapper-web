@@ -300,29 +300,30 @@ class AdresowoScraper(BaseScraper):
         
         # Szukaj kontenera z danymi technicznymi
         summary_container = soup.find('div', class_='offer-summary__item1')
+        area_text = 'N/A'
         if summary_container:
-            # Szukaj sekcji z powierzchnią w kontenerze
-            area_section = summary_container.find('div', string=lambda t: t and 'Powierzchnia' in t)
-            if not area_section:
-                print(f"[{self.site_name}] No area section in summary container")
-                return details
+            print(f"[{self.site_name}] Found summary container")
             
-            print(f"[{self.site_name}] Found area section: {str(area_section)[:100]}...")
-            
-            # Znajdź span z wartością i tekst po spanie
-            area_span = area_section.find('span', class_='offer-summary__value')
-            if area_span:
-                area_value = area_span.get_text(strip=True)
-                print(f"[{self.site_name}] Found area value: {area_value}")
+            # Przeszukaj wszystkie wiersze w kontenerze
+            rows = summary_container.find_all('div', role='row')
+            for row in rows:
+                row_text = ' '.join(row.stripped_strings)
                 
-                unit = area_span.next_sibling.strip() if area_span.next_sibling else 'm²'
-                print(f"[{self.site_name}] Detected unit: '{unit}'")
-                
-                area_text = f"{area_value} {unit}"
+                # Parsowanie powierzchni
+                if 'Powierzchnia' in row_text:
+                    area_span = row.find('span', class_='offer-summary__value')
+                    if area_span:
+                        area_value = area_span.get_text(strip=True)
+                        unit = area_span.next_sibling.strip() if area_span.next_sibling else 'm²'
+                        area_text = f"{area_value} {unit}"
+                        print(f"[{self.site_name}] Found area: {area_text}")
+                        break
             else:
-                print(f"[{self.site_name}] No area span found in container")
+                print(f"[{self.site_name}] No area found in summary rows")
+                area_text = 'N/A'
         else:
             print(f"[{self.site_name}] No summary container found")
+            area_text = 'N/A'
 
         print(f"[{self.site_name}] Preliminary area: {area_text}")
 
@@ -352,32 +353,19 @@ class AdresowoScraper(BaseScraper):
             
         # Image Count
         image_count = 0
-        # Try to get count from a specific element like "1 / 14" or "14 zdjęć"
-        photo_count_element = soup.select_one('div.photoCount, span.photo-count-format, span.photos-count, div.gallery-counter')
-        if photo_count_element:
-            count_text = photo_count_element.get_text(strip=True)
-            # Try to parse "X / Y" or just "Y" or "Y zdjęć"
-            match_xy = re.search(r'(\d+)\s*/\s*(\d+)', count_text) # "X / Y"
-            match_y_total = re.search(r'/s*(\d+)', count_text) # "/ Y" (total from X/Y)
-            match_y_standalone = re.search(r'^(\d+)', count_text) # "Y" or "Y xxx" (count at the beginning)
-            
-            if match_xy:
-                image_count = int(match_xy.group(2)) # Total count from "X / Y"
-            elif match_y_total:
-                image_count = int(match_y_total.group(1))
-            elif match_y_standalone:
-                image_count = int(match_y_standalone.group(1)) # The number found
-        
-        if image_count == 0:
-            # Fallback: Count <img> items in the photo gallery thumbnails or main image area
-            gallery_thumbnails = soup.select('div#photoList ul li, ul.photo-thumbs li, div.gallery-thumbnails-list li')
-            if gallery_thumbnails:
-                image_count = len(gallery_thumbnails)
-            else:
-                # Fallback: count <img> tags in a general gallery section or main image
-                gallery_images = soup.select('img')
-                if gallery_images:
-                    image_count = len(gallery_images)
+        if summary_container:
+            rows = summary_container.find_all('div', role='row')
+            for row in rows:
+                row_text = ' '.join(row.stripped_strings)
+                if 'Zdjęć' in row_text or 'Zdjęcia' in row_text:
+                    count_span = row.find('span', class_='offer-summary__value')
+                    if count_span:
+                        try:
+                            image_count = int(count_span.get_text(strip=True))
+                            print(f"[{self.site_name}] Found image count: {image_count}")
+                        except ValueError:
+                            print(f"[{self.site_name}] Invalid image count value: {count_span.get_text()}")
+                    break
         
         details['image_count'] = image_count
         
