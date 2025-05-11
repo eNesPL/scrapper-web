@@ -1,6 +1,10 @@
 import requests
 from bs4 import BeautifulSoup
 import re
+try:
+    from lxml import html as lxml_html
+except ImportError:
+    lxml_html = None
 
 from .base_scraper import BaseScraper
 # import datetime # If you need to use datetime objects
@@ -185,14 +189,28 @@ class MorizonScraper(BaseScraper):
         }
 
         # Title
-        title_tag = soup.find('h1', class_='summary__title')
-        if not title_tag: # Fallback if specific class not found
-            title_tag = soup.find('div', class_='summary')
-            if title_tag:
-                title_tag = title_tag.find('h1')
-        if title_tag:
-            details['title'] = title_tag.get_text(strip=True)
-        print(f"[{self.site_name}] Title: {details['title']}")
+        if lxml_html and html_content:
+            try:
+                tree = lxml_html.fromstring(html_content)
+                title_elements = tree.xpath('/html/body/div[1]/div[2]/main/div[1]/div[4]/section/div/h1')
+                if title_elements:
+                    details['title'] = title_elements[0].text_content().strip()
+                    print(f"[{self.site_name}] Title (XPath): {details['title']}")
+            except Exception as e:
+                print(f"[{self.site_name}] Error extracting title with XPath: {e}. Falling back to BeautifulSoup.")
+
+        if details['title'] == 'N/A': # Fallback to BeautifulSoup if XPath failed or lxml not available
+            title_tag_bs = soup.find('h1', class_='summary__title')
+            if not title_tag_bs: # Fallback if specific class not found
+                title_tag_summary_bs = soup.find('div', class_='summary')
+                if title_tag_summary_bs:
+                    title_tag_bs = title_tag_summary_bs.find('h1')
+            if title_tag_bs:
+                details['title'] = title_tag_bs.get_text(strip=True)
+            print(f"[{self.site_name}] Title (BeautifulSoup fallback): {details['title']}")
+        else: # If title was found by XPath
+            print(f"[{self.site_name}] Title successfully extracted by XPath: {details['title']}")
+
 
         # Price
         price_tag = soup.find('div', class_='summary__price')
