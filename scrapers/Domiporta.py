@@ -33,7 +33,7 @@ class DomiportaScraper(BaseScraper):
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
                 'Accept-Language': 'pl-PL,pl;q=0.9',
             }
-            response = requests.get(url, headers=headers, params=params, timeout=15)
+            response = requests.get(url, headers=headers, timeout=15)
             response.raise_for_status()
             return response.text
         except requests.RequestException as e:
