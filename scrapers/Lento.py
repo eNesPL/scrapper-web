@@ -305,11 +305,16 @@ class LentoScraper(BaseScraper):
 
         details_section = soup.find('div', class_='oglDetails') # Lento uses this class for details block
         if details_section:
-            print(f"[{self.site_name}] Found 'oglDetails' section.")
+            print(f"[{self.site_name}] DEBUG: Found 'oglDetails' section.")
             details_list_items = details_section.find_all('li')
             if not details_list_items: # Sometimes it's divs instead of li
+                print(f"[{self.site_name}] DEBUG: No 'li' items in 'oglDetails', trying 'div[class^=param param-]'.")
                 details_list_items = details_section.find_all('div', class_=lambda x: x and x.startswith('param param-'))
-            print(f"[{self.site_name}] Found {len(details_list_items)} items in 'oglDetails' section.")
+            
+            if not details_list_items:
+                print(f"[{self.site_name}] DEBUG: Still no items found in 'oglDetails' after trying both 'li' and 'div[class^=param param-]'.")
+            else:
+                print(f"[{self.site_name}] DEBUG: Found {len(details_list_items)} items in 'oglDetails' section.")
 
             section_details_text = []
             for item_idx, item in enumerate(details_list_items):
@@ -324,13 +329,14 @@ class LentoScraper(BaseScraper):
                             details['area_m2'] = area_match.group(1).strip()
                             print(f"[{self.site_name}] Area (BeautifulSoup fallback from details list): {details['area_m2']}")
             if section_details_text:
+                print(f"[{self.site_name}] DEBUG: Extracted section_details_text: {section_details_text}")
                 # Keep section_details_text as a list of strings for better formatting later
                 description_parts.append("Szczegóły ogłoszenia:")
                 description_parts.extend(section_details_text) # Add each item as a new element
             else:
-                print(f"[{self.site_name}] No text items extracted from 'oglDetails' section.")
+                print(f"[{self.site_name}] DEBUG: No text items extracted from 'oglDetails' section (section_details_text is empty).")
         else:
-            print(f"[{self.site_name}] 'oglDetails' section not found.")
+            print(f"[{self.site_name}] DEBUG: 'oglDetails' section not found.")
         
         if details['area_m2'] == 'N/A': # Final fallback if not found in oglDetails list items
             print(f"[{self.site_name}] Area not found by XPath or in oglDetails list. Current value: {details['area_m2']}")
@@ -339,26 +345,27 @@ class LentoScraper(BaseScraper):
 
 
         # "Opis oferty"
+        print(f"[{self.site_name}] DEBUG: Attempting to find 'Opis oferty' header.")
         description_header = soup.find('h3', string=re.compile(r'Opis oferty', re.IGNORECASE))
         if description_header:
-            print(f"[{self.site_name}] Found 'Opis oferty' header.")
+            print(f"[{self.site_name}] DEBUG: Found 'Opis oferty' header: '{description_header.get_text(strip=True)}'")
             description_content_div = description_header.find_next_sibling('div', class_='description')
             if not description_content_div: # Fallback if class is not 'description'
-                 print(f"[{self.site_name}] 'Opis oferty' content div with class 'description' not found, trying generic next div.")
+                 print(f"[{self.site_name}] DEBUG: 'Opis oferty' content div with class 'description' not found, trying generic next div.")
                  description_content_div = description_header.find_next_sibling('div')
 
             if description_content_div:
-                print(f"[{self.site_name}] Found content div for 'Opis oferty'.")
+                print(f"[{self.site_name}] DEBUG: Found content div for 'Opis oferty'. Attempting to extract text.")
                 main_description_text = description_content_div.get_text(separator='\n', strip=True)
                 if main_description_text:
-                    print(f"[{self.site_name}] Extracted main description text. Length: {len(main_description_text)}, Preview: '{main_description_text[:100]}'")
+                    print(f"[{self.site_name}] DEBUG: Extracted main description text. Length: {len(main_description_text)}, Preview: '{main_description_text[:100]}'")
                     description_parts.append("\nOpis główny:\n" + main_description_text) # Changed label for clarity
                 else:
-                    print(f"[{self.site_name}] 'Opis oferty' content div found, but no text extracted.")
+                    print(f"[{self.site_name}] DEBUG: 'Opis oferty' content div found, but no text extracted from it.")
             else:
-                print(f"[{self.site_name}] Content div for 'Opis oferty' not found after header.")
+                print(f"[{self.site_name}] DEBUG: Content div for 'Opis oferty' not found after header.")
         else:
-            print(f"[{self.site_name}] 'Opis oferty' header not found.")
+            print(f"[{self.site_name}] DEBUG: 'Opis oferty' header not found.")
 
         # Add content from specific XPath to description - REMOVED AS PER USER REQUEST
         # if lxml_html and html_content:
@@ -376,7 +383,7 @@ class LentoScraper(BaseScraper):
         #         print(f"[{self.site_name}] Error extracting content from XPath div[9]: {e}")
 
         if description_parts:
-            print(f"[{self.site_name}] Initial description_parts: {description_parts}")
+            print(f"[{self.site_name}] DEBUG: Initial description_parts before processing for final join: {description_parts}")
             # Join parts, ensuring "Szczegóły ogłoszenia:" is followed by its items on new lines
             # and "Opis główny:" is also handled correctly.
             processed_description_parts = []
@@ -393,11 +400,11 @@ class LentoScraper(BaseScraper):
                 else: # Should be main description text if any, or other future sections
                     processed_description_parts.append(part)
             
-            print(f"[{self.site_name}] Processed description_parts for joining: {processed_description_parts}")
+            print(f"[{self.site_name}] DEBUG: Processed description_parts for joining: {processed_description_parts}")
             full_description = "\n".join(filter(None, processed_description_parts))
-            print(f"[{self.site_name}] Full description after join (before stripping and assigning): '{full_description}'")
+            print(f"[{self.site_name}] DEBUG: Full description after join (before stripping and assigning): '{full_description[:200]}...' (Total length: {len(full_description)})") # Log preview
             
-            if full_description.strip():
+            if full_description.strip(): # Check if non-blank after stripping
                 details['description'] = full_description[:1000] + '...' if len(full_description) > 1000 else full_description
             # else, details['description'] remains 'N/A' from initialization
         
@@ -405,7 +412,7 @@ class LentoScraper(BaseScraper):
         if details['description'] != 'N/A':
             print(f"[{self.site_name}] Final Description assigned. Length: {len(details['description'])}, Preview: {details['description'][:100]}")
         else:
-            print(f"[{self.site_name}] Final Description: N/A (description_parts was empty or full_description was blank).")
+            print(f"[{self.site_name}] Final Description: N/A (description_parts was empty or full_description was blank after processing).")
 
         # Image count and First Image URL
         # Lento often has a gallery indicator like "1/12"
