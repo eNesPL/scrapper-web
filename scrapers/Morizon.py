@@ -151,8 +151,18 @@ class MorizonScraper(BaseScraper):
         :return: HTML content (str) or None.
         """
         print(f"[{self.site_name}] Fetching details for URL: {listing_url}")
-        # TODO: Implement actual web request to the listing_url
-        pass
+        try:
+            headers = { # Consistent headers
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+                'Accept-Language': 'en-US,en;q=0.9,pl;q=0.8',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8'
+            }
+            response = requests.get(listing_url, headers=headers, timeout=15)
+            response.raise_for_status()
+            return response.text
+        except requests.exceptions.RequestException as e:
+            print(f"[{self.site_name}] Error fetching details page {listing_url}: {e}")
+            return None
 
     def parse_listing_details(self, html_content):
         """
@@ -163,11 +173,126 @@ class MorizonScraper(BaseScraper):
         print(f"[{self.site_name}] Parsing listing details page content.")
         if not html_content:
             return {}
-        # TODO: Implement HTML parsing logic for Morizon.pl listing detail page
-        # details = {}
-        # details.setdefault('title', 'N/A')
-        # details.setdefault('price', 'N/A')
-        # details.setdefault('description', 'N/A')
-        # details.setdefault('image_count', 0)
-        # return details
-        return {}
+
+        soup = BeautifulSoup(html_content, 'html.parser')
+        details = {
+            'title': 'N/A',
+            'price': 'N/A',
+            'area_m2': 'N/A',
+            'description': 'N/A',
+            'image_count': 0,
+            'first_image_url': None
+        }
+
+        # Title
+        title_tag = soup.find('h1', class_='summary__title')
+        if not title_tag: # Fallback if specific class not found
+            title_tag = soup.find('div', class_='summary')
+            if title_tag:
+                title_tag = title_tag.find('h1')
+        if title_tag:
+            details['title'] = title_tag.get_text(strip=True)
+        print(f"[{self.site_name}] Title: {details['title']}")
+
+        # Price
+        price_tag = soup.find('div', class_='summary__price')
+        if price_tag:
+            details['price'] = price_tag.get_text(strip=True)
+        print(f"[{self.site_name}] Price: {details['price']}")
+
+        description_parts = []
+
+        # Main Description Text
+        description_content_div = soup.find('div', class_='description__content')
+        if description_content_div:
+            # Remove "Pokaż cały opis" button if it's part of the text
+            show_more_button = description_content_div.find('button', class_='showMoreDescription')
+            if show_more_button:
+                show_more_button.decompose()
+            
+            main_desc_text = description_content_div.get_text(separator='\n', strip=True)
+            if main_desc_text:
+                description_parts.append(main_desc_text)
+                print(f"[{self.site_name}] Main description text found. Length: {len(main_desc_text)}")
+
+        # Structured Details (mieszkanie, Budynek, Udogodnienia, Media)
+        sections_to_parse = {
+            "mieszkanie": "Szczegóły mieszkania:",
+            "Budynek": "Szczegóły budynku:",
+            "Udogodnienia": "Udogodnienia:",
+            "Media": "Media:"
+        }
+
+        for h3_text_key, display_title in sections_to_parse.items():
+            h3_tag = soup.find('h3', string=lambda t: t and h3_text_key.lower() in t.lower())
+            if h3_tag:
+                ul_tag = h3_tag.find_next_sibling('ul', class_='propertyDetails__list')
+                if not ul_tag: # Sometimes it's a div with params__dottedList
+                    ul_tag = h3_tag.find_next_sibling('div', class_='params__dottedList')
+
+                if ul_tag:
+                    current_section_details = []
+                    list_items = ul_tag.find_all('li', class_='propertyDetails__item') # for propertyDetails__list
+                    if not list_items: # for params__dottedList
+                        list_items = ul_tag.find_all('div', class_='params__dottedListItem')
+                    
+                    for item in list_items:
+                        label_tag = item.find(['span','div'], class_=['propertyDetails__label', 'params__label'])
+                        value_tag = item.find(['span','div'], class_=['propertyDetails__value', 'params__value'])
+                        
+                        if label_tag and value_tag:
+                            label = label_tag.get_text(strip=True)
+                            value = value_tag.get_text(strip=True)
+                            current_section_details.append(f"{label}: {value}")
+                            
+                            # Extract area_m2 specifically from "Pow. użytkowa"
+                            if "Pow. użytkowa" in label and details['area_m2'] == 'N/A':
+                                details['area_m2'] = value
+                                print(f"[{self.site_name}] Area (Pow. użytkowa): {details['area_m2']}")
+                            elif "Pow. całkowita" in label and details['area_m2'] == 'N/A': # Fallback to całkowita
+                                details['area_m2'] = value
+                                print(f"[{self.site_name}] Area (Pow. całkowita - fallback): {details['area_m2']}")
+                    
+                    if current_section_details:
+                        description_parts.append(f"\n{display_title}\n" + "\n".join(current_section_details))
+                        print(f"[{self.site_name}] Added structured details for: {display_title}")
+        
+        if description_parts:
+            full_description = "\n\n".join(filter(None, description_parts)).strip()
+            details['description'] = full_description[:1000] + '...' if len(full_description) > 1000 else full_description
+        print(f"[{self.site_name}] Final description length: {len(details['description'])}")
+
+
+        # Image Count
+        photos_counter_button = soup.find(['button', 'a'], class_='summary__photos-counter')
+        if photos_counter_button:
+            counter_text = photos_counter_button.get_text(strip=True) # e.g., "Zobacz 8 zdjęć"
+            match = re.search(r'(\d+)', counter_text)
+            if match:
+                details['image_count'] = int(match.group(1))
+        print(f"[{self.site_name}] Image count: {details['image_count']}")
+
+        # First Image URL
+        main_image_gallery = soup.find('div', class_=['summary__gallery', 'image-gallery__item--main', 'summary__photos-main'])
+        if main_image_gallery:
+            img_tag = main_image_gallery.find('img')
+            if img_tag:
+                img_src = img_tag.get('data-src') or img_tag.get('src')
+                if img_src:
+                    if img_src.startswith('//'):
+                        details['first_image_url'] = f"https:{img_src}"
+                    elif not img_src.startswith('http'):
+                        details['first_image_url'] = f"{self.base_url}{img_src if img_src.startswith('/') else '/' + img_src}"
+                    else:
+                        details['first_image_url'] = img_src
+        print(f"[{self.site_name}] First image URL: {details['first_image_url']}")
+
+        # Ensure essential fields are not None
+        details.setdefault('title', 'N/A')
+        details.setdefault('price', 'N/A')
+        details.setdefault('description', 'N/A')
+        details.setdefault('image_count', 0)
+        details.setdefault('area_m2', 'N/A')
+
+        print(f"[{self.site_name}] Parsed details: Price='{details['price']}', Area='{details['area_m2']}', Title='{details['title'][:30]}...'")
+        return details
