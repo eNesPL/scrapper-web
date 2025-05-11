@@ -4,22 +4,79 @@
     <title>Real Estate Listings</title>
     <style>
         body { font-family: Arial, sans-serif; margin: 20px; }
-        .listing { 
-            border: 1px solid #ddd; 
-            padding: 15px; 
+        .listing {
+            border: 1px solid #e0e0e0;
+            padding: 20px;
+            margin-bottom: 25px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            background: #fff;
+            transition: transform 0.2s;
+        }
+        .listing:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 12px rgba(0,0,0,0.1);
+        }
+        .listing h2 { 
+            margin-top: 0;
+            color: #2c3e50;
+            font-size: 1.4em;
             margin-bottom: 15px;
-            border-radius: 5px;
+        }
+        .price {
+            color: #c1403d;
+            font-weight: 700;
+            font-size: 1.5em;
+            margin-bottom: 10px;
+            padding: 10px;
+            background: #fff5f5;
+            border-radius: 4px;
+            display: inline-block;
+        }
+        .details-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin: 15px 0;
+        }
+        .detail-item {
+            padding: 10px;
+            background: #f8f9fa;
+            border-radius: 4px;
+        }
+        .detail-item span:first-child {
+            color: #7f8c8d;
+            display: block;
+            font-size: 0.9em;
+            margin-bottom: 5px;
+        }
+        .detail-item span:last-child {
+            font-weight: 500;
+            color: #2c3e50;
+        }
+        .description {
+            margin: 15px 0;
+            line-height: 1.6;
+            color: #34495e;
+        }
+        .description ul {
+            padding-left: 20px;
+            list-style-type: square;
+        }
+        .last-updated {
+            font-size: 0.85em;
+            color: #95a5a6;
+            margin-top: 15px;
+            border-top: 1px solid #eee;
+            padding-top: 10px;
+        }
+        img {
+            max-width: 100%;
+            height: auto;
+            border-radius: 4px;
+            margin-bottom: 15px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }
-        .listing h2 { margin-top: 0; }
-        .price { 
-            color: #c1403d;
-            font-weight: bold;
-            font-size: 1.2em; 
-        }
-        .meta { color: #666; margin: 5px 0; }
-        .description { margin-top: 10px; }
-        .last-updated { font-size: 0.8em; color: #999; }
         a { color: #0066cc; text-decoration: none; }
         a:hover { text-decoration: underline; }
     </style>
@@ -35,13 +92,40 @@
             <img src="{{ listing.first_image_url }}" style="max-width: 300px; max-height: 200px; margin-bottom: 10px;">
             {% endif %}
             <div class="price">{{ listing.price }}</div>
-            <div class="meta">
-                <span>Area: {{ listing.area_m2 or 'N/A' }}</span> | 
-                <span>Images: {{ listing.image_count }}</span> | 
-                <span>Source: {{ listing.site_name }}</span>
+            
+            {% if listing.first_image_url %}
+            <img src="{{ listing.first_image_url }}" alt="Zdjęcie nieruchomości">
+            {% endif %}
+            
+            <div class="details-grid">
+                <div class="detail-item">
+                    <span>Powierzchnia</span>
+                    <span>{{ listing.area_m2 or 'N/A' }}</span>
+                </div>
+                <div class="detail-item">
+                    <span>Liczba zdjęć</span>
+                    <span>{{ listing.image_count }}</span>
+                </div>
+                <div class="detail-item">
+                    <span>Źródło</span>
+                    <span>{{ listing.site_name }}</span>
+                </div>
             </div>
+
             <div class="description">
-                {{ listing.description[:200] }}{% if listing.description|length > 200 %}...{% endif %}
+                {% if listing.description and listing.description != 'N/A' %}
+                    {% if '\n' in listing.description %}
+                        <ul>
+                        {% for line in listing.description.split('\n') %}
+                            <li>{{ line }}</li>
+                        {% endfor %}
+                        </ul>
+                    {% else %}
+                        {{ listing.description }}
+                    {% endif %}
+                {% else %}
+                    Brak opisu
+                {% endif %}
             </div>
             <div class="last-updated">
                 Last updated: {{ listing.last_updated }}
