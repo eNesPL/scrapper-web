@@ -346,65 +346,76 @@ class MorizonScraper(BaseScraper):
         print(f"[{self.site_name}] Image count: {details['image_count']}")
 
         # First Image URL
-        # Try more specific selectors first for the main image
-        # XPath /html/body/div[1]/div[2]/main/div[1]/div[3]/div[1]/button[1] points to a button, not an image.
-        # We will use BeautifulSoup to find the actual main image.
-        
-        # Common Morizon structure for main image:
-        # 1. Inside a div with class 'summary__gallery' or 'summary__photos-main'
-        # 2. The image itself might be in 'image-gallery__item--main' or directly as an img
-        
-        # Attempt 1: More specific gallery containers
-        main_photo_container = soup.find('div', class_='summary__gallery')
-        if not main_photo_container:
-            main_photo_container = soup.find('div', class_='summary__photos-main')
-        if not main_photo_container: # Another common pattern for the main image wrapper
-            main_photo_container = soup.find('div', class_='image-gallery__item--main')
-        if not main_photo_container: # A more generic one if others fail
-            main_photo_container = soup.find('div', class_='galleryPhotos__photo')
+        if lxml_html and html_content:
+            try:
+                # Ensure tree is parsed, reuse if already parsed for title/price/area
+                if 'tree' not in locals() or tree is None:
+                    tree = lxml_html.fromstring(html_content)
+                
+                image_elements_xpath = tree.xpath('/html/body/div[1]/div[2]/main/div[1]/div[3]/div[1]/button[1]/img')
+                if image_elements_xpath:
+                    img_src_xpath = image_elements_xpath[0].get('src')
+                    if img_src_xpath:
+                        details['first_image_url'] = img_src_xpath
+                        print(f"[{self.site_name}] First image URL (XPath): {details['first_image_url']}")
+                        # Normalize URL if needed
+                        if details['first_image_url'].startswith('//'):
+                            details['first_image_url'] = f"https:{details['first_image_url']}"
+                        elif not details['first_image_url'].startswith('http'):
+                            details['first_image_url'] = f"{self.base_url}{details['first_image_url'] if details['first_image_url'].startswith('/') else '/' + details['first_image_url']}"
+            except Exception as e:
+                print(f"[{self.site_name}] Error extracting first image URL with XPath: {e}. Falling back to BeautifulSoup.")
 
+        if not details['first_image_url']: # Fallback to BeautifulSoup if XPath failed or lxml not available
+            print(f"[{self.site_name}] First image URL not found by XPath, trying BeautifulSoup fallback.")
+            # Common Morizon structure for main image:
+            # 1. Inside a div with class 'summary__gallery' or 'summary__photos-main'
+            # 2. The image itself might be in 'image-gallery__item--main' or directly as an img
+            
+            # Attempt 1: More specific gallery containers
+            main_photo_container_bs = soup.find('div', class_='summary__gallery')
+            if not main_photo_container_bs:
+                main_photo_container_bs = soup.find('div', class_='summary__photos-main')
+            if not main_photo_container_bs: # Another common pattern for the main image wrapper
+                main_photo_container_bs = soup.find('div', class_='image-gallery__item--main')
+            if not main_photo_container_bs: # A more generic one if others fail
+                main_photo_container_bs = soup.find('div', class_='galleryPhotos__photo')
 
-        if main_photo_container:
-            img_tag = main_photo_container.find('img')
-            if img_tag:
-                img_src = img_tag.get('data-src') or img_tag.get('src')
-                if img_src:
-                    if img_src.startswith('//'):
-                        details['first_image_url'] = f"https:{img_src}"
-                    elif not img_src.startswith('http'):
-                        details['first_image_url'] = f"{self.base_url}{img_src if img_src.startswith('/') else '/' + img_src}"
-                    else:
-                        details['first_image_url'] = img_src
-        
-        if details['first_image_url']:
-            print(f"[{self.site_name}] First image URL (found in specific container): {details['first_image_url']}")
-        else:
-            # Fallback: Try to find any prominent image if specific containers fail
-            # This is less reliable but can be a last resort.
-            # Look for an image within an element that might be a main image wrapper
-            # e.g., a div with class 'photo' or 'image' or an article tag
-            print(f"[{self.site_name}] First image not found in specific containers, trying broader search.")
-            # The previous generic find was: soup.find('div', class_=['summary__gallery', 'image-gallery__item--main', 'summary__photos-main'])
-            # Let's try a slightly different approach for fallback: find first img in common content areas
-            content_areas_for_img = soup.find_all(['section', 'article', 'div'], class_=['summary', 'content', 'listingDetails'], limit=3)
-            for area in content_areas_for_img:
-                img_tag = area.find('img')
-                if img_tag:
-                    img_src = img_tag.get('data-src') or img_tag.get('src')
-                    if img_src and not img_src.startswith('data:image'): # Avoid base64 images
-                        if img_src.startswith('//'):
-                            details['first_image_url'] = f"https:{img_src}"
-                        elif not img_src.startswith('http'):
-                            details['first_image_url'] = f"{self.base_url}{img_src if img_src.startswith('/') else '/' + img_src}"
+            if main_photo_container_bs:
+                img_tag_bs = main_photo_container_bs.find('img')
+                if img_tag_bs:
+                    img_src_bs = img_tag_bs.get('data-src') or img_tag_bs.get('src')
+                    if img_src_bs:
+                        if img_src_bs.startswith('//'):
+                            details['first_image_url'] = f"https:{img_src_bs}"
+                        elif not img_src_bs.startswith('http'):
+                            details['first_image_url'] = f"{self.base_url}{img_src_bs if img_src_bs.startswith('/') else '/' + img_src_bs}"
                         else:
-                            details['first_image_url'] = img_src
-                        
-                        if details['first_image_url']:
-                            print(f"[{self.site_name}] First image URL (found in fallback area): {details['first_image_url']}")
-                            break # Found one
-            if not details['first_image_url']:
-                 print(f"[{self.site_name}] First image URL still not found after fallbacks.")
-
+                            details['first_image_url'] = img_src_bs
+            
+            if details['first_image_url']:
+                print(f"[{self.site_name}] First image URL (found in specific container via BeautifulSoup): {details['first_image_url']}")
+            else:
+                # Fallback: Try to find any prominent image if specific containers fail
+                print(f"[{self.site_name}] First image not found in specific BS containers, trying broader BS search.")
+                content_areas_for_img_bs = soup.find_all(['section', 'article', 'div'], class_=['summary', 'content', 'listingDetails'], limit=3)
+                for area_bs in content_areas_for_img_bs:
+                    img_tag_fallback_bs = area_bs.find('img')
+                    if img_tag_fallback_bs:
+                        img_src_fallback_bs = img_tag_fallback_bs.get('data-src') or img_tag_fallback_bs.get('src')
+                        if img_src_fallback_bs and not img_src_fallback_bs.startswith('data:image'): # Avoid base64 images
+                            if img_src_fallback_bs.startswith('//'):
+                                details['first_image_url'] = f"https:{img_src_fallback_bs}"
+                            elif not img_src_fallback_bs.startswith('http'):
+                                details['first_image_url'] = f"{self.base_url}{img_src_fallback_bs if img_src_fallback_bs.startswith('/') else '/' + img_src_fallback_bs}"
+                            else:
+                                details['first_image_url'] = img_src_fallback_bs
+                            
+                            if details['first_image_url']:
+                                print(f"[{self.site_name}] First image URL (found in BS fallback area): {details['first_image_url']}")
+                                break # Found one
+                if not details['first_image_url']:
+                     print(f"[{self.site_name}] First image URL still not found after all fallbacks.")
 
         # Ensure essential fields are not None
         details.setdefault('title', 'N/A')
