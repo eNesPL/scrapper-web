@@ -86,17 +86,24 @@ class DatabaseManager:
         # Prepare the SET part of the SQL query dynamically
         set_clauses = []
         values = []
-        # Allowed fields to update directly in columns
-        allowed_fields_to_update = ['title', 'price', 'description', 'image_count', 'first_image_url', 'raw_data', 'site_name']
-        for key, value in update_data.items():
-            if key in allowed_fields_to_update: 
-                set_clauses.append(f"{key} = ?")
-                values.append(json.dumps(value) if key == 'raw_data' else value)
         
-        if not set_clauses:
-            print(f"No valid fields to update for {url}.")
-            conn.close()
-            return
+        # Fields that have dedicated columns and should be updated from update_data
+        direct_column_fields = ['title', 'price', 'description', 'image_count', 'first_image_url', 'site_name']
+        
+        for field in direct_column_fields:
+            if field in update_data: # Check if the scraper provided this field
+                set_clauses.append(f"{field} = ?")
+                values.append(update_data[field])
+        
+        # Always update raw_data with the full update_data dictionary
+        # This ensures all scraped fields, like area_m2, are stored.
+        set_clauses.append("raw_data = ?")
+        values.append(json.dumps(update_data))
+
+        # If only raw_data was set (e.g. no direct_column_fields were in update_data, which is unlikely but possible),
+        # set_clauses would still not be empty.
+        # The original check for empty set_clauses might be too strict if we always add raw_data.
+        # However, if update_data itself was empty, json.dumps({}) is "{}", which is valid.
 
         # Always update last_updated and last_checked timestamps
         set_clauses.append("last_updated = ?")
