@@ -149,15 +149,18 @@ class NieruchomosciOnlineScraper(BaseScraper):
         :return: HTML content (str) or None.
         """
         print(f"[{self.site_name}] Fetching details for URL: {listing_url}")
-        # TODO: Implement actual web request to the listing_url
-        # try:
-        #     response = requests.get(listing_url, timeout=10)
-        #     response.raise_for_status()
-        #     return response.text
-        # except requests.RequestException as e:
-        #     print(f"[{self.site_name}] Error fetching listing details page {listing_url}: {e}")
-        #     return None
-        pass
+        try:
+            headers = { # Nieruchomosci-Online might require some headers
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+                'Accept-Language': 'pl-PL,pl;q=0.9,en-US;q=0.8,en;q=0.7',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9'
+            }
+            response = requests.get(listing_url, headers=headers, timeout=10)
+            response.raise_for_status()
+            return response.text
+        except requests.exceptions.RequestException as e:
+            print(f"[{self.site_name}] Error fetching listing details page {listing_url}: {e}")
+            return None
 
     def parse_listing_details(self, html_content):
         """
