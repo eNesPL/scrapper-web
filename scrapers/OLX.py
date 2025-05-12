@@ -1,4 +1,5 @@
 # In a real scraper, you would import libraries like requests and BeautifulSoup:
+import re
 import requests
 from bs4 import BeautifulSoup
 
@@ -61,11 +62,14 @@ class OLXScraper(BaseScraper):
         for listing in soup.find_all('div', {'data-cy': 'l-card'}):
             try:
                 # Get listing URL
-                link = listing.find('a', {'data-cy': 'listing-ad-title'})
+                title_div = listing.find('div', {'data-cy': 'ad-card-title'})
+                link = title_div.find('a') if title_div else None
                 if not link or not link.get('href'):
                     continue
                     
                 url = link['href']
+                if "otodom.pl" in url:
+                    url = url.split('?')[0]  # Usuń parametry śledzenia
                 if not url.startswith('http'):
                     url = f"https://www.olx.pl{url}"
                 
@@ -77,7 +81,8 @@ class OLXScraper(BaseScraper):
                 price = None
                 if price_element:
                     try:
-                        price_text = price_element.get_text().replace(' ', '').replace('zł', '').strip()
+                        import re
+                        price_text = re.sub(r'[^\d]', '', price_element.get_text())  # Usuń wszystkie niecyfrowe znaki
                         price = float(price_text) if price_text else None
                     except (ValueError, AttributeError):
                         pass
@@ -87,21 +92,22 @@ class OLXScraper(BaseScraper):
                 location = ''
                 date = ''
                 if location_date:
-                    spans = location_date.find_all('span')
-                    if spans:
-                        location = spans[0].get_text().strip()
-                        if len(spans) > 1:
-                            date = spans[-1].get_text().strip()
+                    location_parts = location_date.get_text().split(' - ')
+                    location = location_parts[0].strip() if len(location_parts) > 0 else ''
+                    date = location_parts[1].strip() if len(location_parts) > 1 else ''
                 
                 # Get size
                 size = None
-                size_element = listing.find('span', text=lambda t: t and 'm²' in t)
-                if size_element:
-                    try:
-                        size_text = size_element.get_text().replace('m²', '').replace(',', '.').strip()
-                        size = float(size_text)
-                    except ValueError:
-                        pass
+                size_container = listing.find('div', {'color': 'text-global-secondary'})
+                size = None
+                if size_container:
+                    size_element = size_container.find('span', class_='css-6as4g5')
+                    if size_element:
+                        try:
+                            size_text = size_element.get_text().split('-')[0].replace('m²', '').strip()
+                            size = float(size_text.replace(',', '.'))
+                        except ValueError:
+                            pass
 
                 listing_data = {
                     'url': url,
@@ -117,7 +123,7 @@ class OLXScraper(BaseScraper):
                 continue
                 
         # Check for next page
-        next_page_btn = soup.find('a', {'data-cy': 'page-link-next'})
+        next_page_btn = soup.find('a', href=lambda x: x and 'page=' in x)
         has_next_page = bool(next_page_btn)
         
         return listings, has_next_page
