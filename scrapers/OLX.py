@@ -1,6 +1,6 @@
 # In a real scraper, you would import libraries like requests and BeautifulSoup:
-# import requests
-# from bs4 import BeautifulSoup
+import requests
+from bs4 import BeautifulSoup
 
 from .base_scraper import BaseScraper
 # import datetime # If you need to use datetime objects
@@ -23,8 +23,15 @@ class OLXScraper(BaseScraper):
         :return: HTML content (str) or None.
         """
         print(f"[{self.site_name}] Fetching listings page with criteria: {search_criteria}")
-        # TODO: Implement actual web request to OLX.pl
-        pass
+        url = "https://www.olx.pl/nieruchomosci/mieszkania/sprzedaz/gliwice/?search%5Bfilter_float_price:to%5D=300000&search%5Bfilter_float_m:from%5D=25&search%5Bfilter_enum_rooms%5D%5B0%5D=two&search%5Bfilter_enum_rooms%5D%5B1%5D=three"
+        
+        try:
+            response = requests.get(url)
+            response.raise_for_status()
+            return response.text
+        except requests.exceptions.RequestException as e:
+            print(f"Error fetching listings: {e}")
+            return None
 
     def parse_listings(self, html_content):
         """
