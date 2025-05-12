@@ -70,76 +70,64 @@ class NieruchomosciOnlineScraper(BaseScraper):
         for item_element in listing_elements:
             summary = {}
             
-            # URL and Title
-            link_tag = item_element.find('a', class_='item__link', href=True)
-            if not link_tag: # Fallback for title link
-                title_h_tag = item_element.find(['h2', 'h3'], class_='item__title')
-                if title_h_tag:
-                    link_tag = title_h_tag.find_parent('a', href=True) # Link might wrap the title
+            # URL and Title from <h2 class="name body-lg"><a href="...">...</a></h2>
+            title_h2_tag = item_element.find('h2', class_='name') 
+            link_tag = title_h2_tag.find('a', href=True) if title_h2_tag else None
             
             if link_tag and link_tag.get('href'):
                 url = link_tag['href']
-                # Nieruchomosci-Online URLs are often relative to the domain or a sub-domain
+                # Nieruchomosci-Online URLs can be relative
                 if url.startswith('//'):
                     summary['url'] = f"https:{url}"
                 elif url.startswith('/'):
                     summary['url'] = f"{self.base_url}{url}"
-                else: # Assuming it might be a full URL or needs context
+                else: # Assuming it might be a full URL or needs context (like relative to current page path)
                     summary['url'] = url 
                 
-                title_tag_in_link = link_tag.find(['h2', 'h3'], class_='item__title')
-                if title_tag_in_link:
-                    summary['title'] = title_tag_in_link.get_text(strip=True)
-                elif link_tag.get_text(strip=True): # Fallback to link's text if no specific title tag
-                    summary['title'] = link_tag.get_text(strip=True)
-                else:
-                    summary['title'] = 'N/A'
+                summary['title'] = link_tag.get_text(strip=True) if link_tag else 'N/A'
             else:
                 print(f"[{self.site_name}] Skipping item, no URL found.")
                 continue
 
-            # Price
-            price_tag = item_element.find('p', class_='price__value')
-            if price_tag:
-                summary['price'] = price_tag.get_text(strip=True).replace('\xa0', ' ')
+            # Price and Area from <p class="title-a primary-display font-bold header-sm">
+            # <span>PRICE</span><span class="area">AREA</span>
+            price_container_tag = item_element.find('p', class_='title-a') # More specific: 'primary-display'
+            if price_container_tag:
+                price_span = price_container_tag.find('span', recursive=False) # First span for price
+                if price_span:
+                    summary['price'] = price_span.get_text(strip=True).replace('\xa0', ' ')
+                else:
+                    summary['price'] = 'N/A'
+                
+                area_span = price_container_tag.find('span', class_='area')
+                if area_span:
+                    summary['area_m2'] = area_span.get_text(strip=True).replace('\xa0', ' ')
+                else:
+                    summary['area_m2'] = 'N/A'
             else:
                 summary['price'] = 'N/A'
-
-            # Area - often part of the price string or in params list
-            area_text = None
-            if price_tag and "m²" in price_tag.get_text(): # Check if area is in price string
-                price_text_content = price_tag.get_text(strip=True).replace('\xa0', ' ')
-                # Example: "265 000 zł35,80 m² 7 402,23 zł/m²"
-                match = re.search(r'([\d,\.]+)\s*m²', price_text_content)
-                if match:
-                    area_text = match.group(1) + " m²"
+                summary['area_m2'] = 'N/A'
             
-            if not area_text: # Fallback to params list
-                params_list = item_element.find('ul', class_='params__list')
-                if params_list:
-                    for param_item in params_list.find_all('li', class_='params__item'):
-                        if "m²" in param_item.get_text() and "zł/m²" not in param_item.get_text():
-                            area_text = param_item.get_text(strip=True)
-                            break
-            summary['area_m2'] = area_text.strip() if area_text else 'N/A'
-            
-            # First Image URL
-            photo_container = item_element.find(['div', 'figure'], class_=['item__photo', 'item__photo_container'])
-            if photo_container:
-                img_tag = photo_container.find('img')
+            # First Image URL from <ul class="thumb-slider __no-click"><li><a><img src="..."></a></li></ul>
+            thumb_slider_ul = item_element.find('ul', class_='thumb-slider')
+            if thumb_slider_ul:
+                img_tag = thumb_slider_ul.find('img') # First img tag within the slider
                 if img_tag:
-                    img_src = img_tag.get('data-src') or img_tag.get('src')
+                    img_src = img_tag.get('src') or img_tag.get('data-src') # Prefer src, fallback to data-src
                     if img_src:
                         if img_src.startswith('//'):
                             summary['first_image_url'] = f"https:{img_src}"
                         elif img_src.startswith('/'):
                              summary['first_image_url'] = f"{self.base_url}{img_src}"
-                        elif not img_src.startswith('http'): # Relative path without leading slash
-                             summary['first_image_url'] = f"{self.base_url}/{img_src}"
+                        # Handle cases where base_url might already be part of a relative path if not starting with /
+                        elif not img_src.startswith('http') and not img_src.startswith(self.base_url):
+                             summary['first_image_url'] = f"{self.base_url}/{img_src.lstrip('/')}"
                         else:
                             summary['first_image_url'] = img_src
                     else:
                         summary['first_image_url'] = None
+                else:
+                    summary['first_image_url'] = None
             else:
                 summary['first_image_url'] = None
 
