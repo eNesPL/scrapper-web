@@ -139,8 +139,9 @@ class OLXScraper(BaseScraper):
         :return: HTML content (str) or None.
         """
         print(f"[{self.site_name}] Fetching details for URL: {listing_url}")
+        headers = {'User-Agent': self.USER_AGENT}
         try:
-            response = requests.get(listing_url)
+            response = requests.get(listing_url, headers=headers, timeout=10)
             response.raise_for_status()
             return response.text
         except Exception as e:
