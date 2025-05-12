@@ -49,10 +49,11 @@ class OLXScraper(BaseScraper):
         listings = []
         
         # Find all listing containers
-        for listing in soup.find_all('a', {'data-cy': 'listing-item-link'}):
+        for listing in soup.find_all('div', class_='css-l9drzq'):
             try:
+                listing_link = listing.find('a', href=True)
                 listing_data = {
-                    'url': listing['href'] if listing['href'].startswith('http') else f"https://www.olx.pl{listing['href']}",
+                    'url': listing_link['href'] if listing_link['href'].startswith('http') else f"https://www.olx.pl{listing_link['href']}",
                     'title': listing.find('h6').get_text().strip(),
                     'price': float(listing.find('p', {'data-testid': 'ad-price'})
                                   .get_text()
