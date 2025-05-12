@@ -58,27 +58,43 @@ class OLXScraper(BaseScraper):
         listings = []
         
         # Find all listing containers
-        for listing in soup.find_all('div', class_='css-l9drzq'):
+        for listing in soup.find_all('div', {'data-cy': 'l-card'}):
             try:
                 listing_link = listing.find('a', href=True)
+                location_date = listing.find('p', {'data-testid': 'location-date'})
+                if location_date:
+                    elements = location_date.find_all('span')
+                    location = elements[0].get_text().strip() if len(elements) > 0 else ''
+                    date = elements[-1].get_text().strip() if len(elements) > 1 else ''
+
+                size_element = listing.find('span', {'data-testid': 'list-item'}, text=lambda t: 'm²' in t if t else False)
+                size = None
+                if size_element:
+                    size_text = size_element.get_text().replace(' m²', '').replace(',', '.').strip()
+                    try:
+                        size = float(size_text)
+                    except ValueError:
+                        pass
+
+                price = None
+                price_element = listing.find('p', {'data-testid': 'ad-price'})
+                if price_element:
+                    try:
+                        price_text = price_element.get_text()
+                        price = float(''.join(filter(str.isdigit, price_text)))
+                    except (AttributeError, ValueError):
+                        pass
+
                 listing_data = {
                     'url': listing_link['href'] if listing_link['href'].startswith('http') else f"https://www.olx.pl{listing_link['href']}",
                     'title': listing.find('h6').get_text().strip(),
-                    'price': float(listing.find('p', {'data-testid': 'ad-price'})
-                                  .get_text()
-                                  .replace(' ', '')
-                                  .replace('zł', '')
-                                  .strip()),
-                    'location': listing.find('p', {'data-testid': 'location-date'})
-                                  .get_text()
-                                  .split('-')[0].strip(),
-                    'date_added': listing.find('p', {'data-testid': 'location-date'})
-                                  .get_text()
-                                  .split('-')[1].strip(),
-                    'size': float(listing.find_all('span', class_='css-643j0o')[-1]
-                                  .get_text()
-                                  .replace(' m²', '')
-                                  .replace(',', '.'))
+                    'price': price,
+                    'location': location,
+                    'date_added': date,
+                    'size': size,
+                    'location': '',
+                    'date_added': '',
+                    'size': None
                 }
                 listings.append(listing_data)
             except (AttributeError, ValueError) as e:
@@ -86,8 +102,8 @@ class OLXScraper(BaseScraper):
                 continue
                 
         # Sprawdź czy jest następna strona
-        next_page_btn = soup.find('a', {'data-testid': 'pagination-forward'})
-        has_next_page = next_page_btn is not None
+        next_page_btn = soup.find('a', {'href': lambda x: x and 'page=' in x and '&search' in x})
+        has_next_page = bool(next_page_btn)
         
         return listings, has_next_page
 
@@ -98,8 +114,13 @@ class OLXScraper(BaseScraper):
         :return: HTML content (str) or None.
         """
         print(f"[{self.site_name}] Fetching details for URL: {listing_url}")
-        # TODO: Implement actual web request to the listing_url
-        pass
+        try:
+            response = requests.get(listing_url)
+            response.raise_for_status()
+            return response.text
+        except Exception as e:
+            print(f"Error fetching details: {e}")
+            return None
 
     def parse_listing_details(self, html_content):
         """
