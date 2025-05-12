@@ -73,7 +73,7 @@ class BaseScraper(ABC):
         
         processed_properties_data = []
         page = 1
-        while True:
+        while page <= self.MAX_PAGES:
             print(f"[{self.site_name}] Processing page {page}")
             
             # Pobierz i przetwórz stronę

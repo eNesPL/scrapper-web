@@ -13,6 +13,8 @@ class OLXScraper(BaseScraper):
 
     USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36'
 
+    MAX_PAGES = 50  # Maksymalna liczba stron do przetworzenia
+    
     def __init__(self, db_manager=None, notification_manager=None):
         super().__init__(site_name="OLX.pl",
                          db_manager=db_manager,
@@ -126,25 +128,8 @@ class OLXScraper(BaseScraper):
                 print(f"Error parsing listing: {e}")
                 continue
                 
-        # Improved pagination detection using the provided HTML structure
-        pagination = soup.find('ul', {'data-testid': 'pagination-list'})
-        has_next_page = False
-        
-        if pagination:
-            # Check for active page and next page arrow
-            active_page = pagination.find('li', class_='pagination-item__active')
-            next_page_arrow = pagination.find('a', {'data-testid': 'pagination-forward'})
-            
-            # If there's a forward arrow, there's a next page
-            has_next_page = next_page_arrow is not None
-            
-            # Additional check: if current page is last numbered page
-            if active_page:
-                page_numbers = [li.get_text() for li in pagination.find_all('li') if li.get_text().isdigit()]
-                if page_numbers:
-                    last_page = max(map(int, page_numbers))
-                    current_page = int(active_page.get_text())
-                    has_next_page = current_page < last_page
+        # Nowa logika paginacji - kontynuuj dopóki są ogłoszenia
+        has_next_page = len(listings) > 0  # Kontynuuj jeśli są jakiekolwiek ogłoszenia na obecnej stronie
 
         return listings, has_next_page
 
