@@ -175,20 +175,97 @@ class NieruchomosciOnlineScraper(BaseScraper):
         print(f"[{self.site_name}] Parsing listing details page content.")
         if not html_content:
             return {}
-        # TODO: Implement HTML parsing logic for Nieruchomosci-Online.pl listing detail page
-        # from bs4 import BeautifulSoup
-        # soup = BeautifulSoup(html_content, 'html.parser')
-        # details = {}
-        # details['title'] = soup.find('h1', class_='property-title').text.strip() # Example
-        # details['price'] = soup.find('div', class_='property-price').text.strip() # Example
-        # description_tag = soup.find('div', id='propertyDescription')
-        # details['description'] = description_tag.text.strip() if description_tag else 'N/A'
-        # image_gallery = soup.find('div', class_='gallery-thumbs')
-        # details['image_count'] = len(image_gallery.find_all('img')) if image_gallery else 0
-        #
-        # details.setdefault('title', 'N/A')
-        # details.setdefault('price', 'N/A')
-        # details.setdefault('description', 'N/A')
-        # details.setdefault('image_count', 0)
-        # return details
-        return {}
+        
+        soup = BeautifulSoup(html_content, 'html.parser')
+        details = {}
+
+        # Title (combining main title and address/subtitle)
+        title_text = 'N/A'
+        # Main title, often in <h1>. Specific class from example: 'name' or data-v- attribute
+        # Looking for a prominent h1, then trying to refine.
+        # Example HTML shows: <h1 data-v-423197c2> Mieszkanie, ul. Bema </h1>
+        # And <p class="address" data-v-423197c2> Bema, Sośnica, Gliwice, śląskie </p>
+        main_title_tag = soup.find('h1') # General h1 first
+        if main_title_tag:
+            title_text = main_title_tag.get_text(strip=True)
+            # Try to find a more specific address part if available near title
+            address_p_tag = main_title_tag.find_next_sibling('p', class_='address') # Common pattern
+            if not address_p_tag: # Fallback for other structures
+                 # The provided HTML has title and address under a div with class "name"
+                 # <div class="name"><h1>...</h1> <p class="address">...</p></div>
+                 # Or sometimes section data-id="section-title"
+                title_section = soup.find(lambda tag: tag.name == 'div' and tag.find('h1') and tag.find('p', class_='address'))
+                if title_section:
+                    h1_in_section = title_section.find('h1')
+                    p_in_section = title_section.find('p', class_='address')
+                    if h1_in_section: title_text = h1_in_section.get_text(strip=True)
+                    if p_in_section: title_text += f" - {p_in_section.get_text(strip=True)}"
+
+
+        details['title'] = title_text
+
+        # Price
+        # Example HTML: <div class="price-wrapper"> <strong data-v-0f534888>299&nbsp;000&nbsp;zł</strong> ... </div>
+        price_strong_tag = soup.select_one('div.price-wrapper > strong')
+        if price_strong_tag:
+            details['price'] = price_strong_tag.get_text(strip=True).replace('\xa0', ' ')
+        else: # Fallback for other price structures, e.g. section with data-id="section-price"
+            price_section = soup.find('section', attrs={'data-id': 'section-price'})
+            if price_section:
+                price_val_tag = price_section.find(['strong', 'div'], class_=['price', 'value', 'amount']) # Common classes
+                if price_val_tag:
+                     details['price'] = price_val_tag.get_text(strip=True).replace('\xa0', ' ')
+        details.setdefault('price', 'N/A')
+
+
+        # Description
+        # Example HTML: <div data-v-9c715a1c id="description" class="description"> <div data-v-9c715a1c class="text-content"> ... </div></div>
+        description_div = soup.find('div', id='description')
+        if description_div:
+            text_content_div = description_div.find('div', class_='text-content')
+            if text_content_div:
+                # Collect all p tags and join their text
+                paragraphs = text_content_div.find_all('p')
+                details['description'] = "\n".join(p.get_text(strip=True) for p in paragraphs if p.get_text(strip=True))
+            else: # Fallback if no 'text-content' div, take all text from #description
+                details['description'] = description_div.get_text(separator="\n", strip=True)
+        details.setdefault('description', 'N/A')
+        if not details['description'] or details['description'].isspace(): # Check if description is empty or just whitespace
+            # Fallback: look for a div with class "description" if id="description" is not fruitful
+            desc_class_div = soup.find('div', class_='description')
+            if desc_class_div and desc_class_div.find('div', class_='text-content'):
+                 paragraphs = desc_class_div.find('div', class_='text-content').find_all('p')
+                 details['description'] = "\n".join(p.get_text(strip=True) for p in paragraphs if p.get_text(strip=True))
+            elif desc_class_div: # Take all text from div.description
+                 details['description'] = desc_class_div.get_text(separator="\n", strip=True)
+
+
+        # Image Count
+        # Example HTML: <div class="gallery__counter">1/20</div>
+        # Or count images in a gallery container
+        image_count = 0
+        gallery_counter_tag = soup.find(class_=['gallery__counter', 'gallery-counter']) # Common class names
+        if gallery_counter_tag:
+            match = re.search(r'/(\d+)', gallery_counter_tag.get_text(strip=True))
+            if match:
+                image_count = int(match.group(1))
+        
+        if image_count == 0: # Fallback: try to count image elements in a gallery
+            # Common gallery container selectors
+            gallery_container = soup.find(['div', 'ul'], class_=['gallery', 'gallery-thumbs', 'swiper-wrapper', 'slick-track'])
+            if gallery_container:
+                # Count direct img children or li > img or div > img patterns
+                images_in_gallery = gallery_container.find_all('img', recursive=True) # Recursive to catch nested images
+                # Filter out tiny icons if possible, though hard without more context
+                image_count = len(images_in_gallery)
+
+        details['image_count'] = image_count
+        
+        # Ensure all tracked fields have a default
+        details.setdefault('title', 'N/A')
+        details.setdefault('price', 'N/A')
+        details.setdefault('description', 'N/A')
+        details.setdefault('image_count', 0)
+
+        print(f"[{self.site_name}] Parsed details: Title: {details.get('title', 'N/A')[:30]}..., Price: {details.get('price', 'N/A')}, Image Count: {details.get('image_count', 0)}")
+        return details
