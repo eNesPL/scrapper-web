@@ -32,11 +32,43 @@ class OLXScraper(BaseScraper):
         :param html_content: str, HTML content of the listings page.
         :return: List of dictionaries, each with at least a 'url'.
         """
+        from bs4 import BeautifulSoup
         print(f"[{self.site_name}] Parsing listings page content.")
+        
         if not html_content:
             return []
-        # TODO: Implement HTML parsing logic for OLX.pl listings page
-        return []
+            
+        soup = BeautifulSoup(html_content, 'html.parser')
+        listings = []
+        
+        # Find all listing containers
+        for listing in soup.find_all('a', {'data-cy': 'listing-item-link'}):
+            try:
+                listing_data = {
+                    'url': listing['href'] if listing['href'].startswith('http') else f"https://www.olx.pl{listing['href']}",
+                    'title': listing.find('h6').get_text().strip(),
+                    'price': float(listing.find('p', {'data-testid': 'ad-price'})
+                                  .get_text()
+                                  .replace(' ', '')
+                                  .replace('zł', '')
+                                  .strip()),
+                    'location': listing.find('p', {'data-testid': 'location-date'})
+                                  .get_text()
+                                  .split('-')[0].strip(),
+                    'date_added': listing.find('p', {'data-testid': 'location-date'})
+                                  .get_text()
+                                  .split('-')[1].strip(),
+                    'size': float(listing.find_all('span', class_='css-643j0o')[-1]
+                                  .get_text()
+                                  .replace(' m²', '')
+                                  .replace(',', '.'))
+                }
+                listings.append(listing_data)
+            except (AttributeError, ValueError) as e:
+                print(f"Error parsing listing: {e}")
+                continue
+                
+        return listings
 
     def fetch_listing_details_page(self, listing_url):
         """
@@ -54,14 +86,40 @@ class OLXScraper(BaseScraper):
         :param html_content: str, HTML content of the listing detail page.
         :return: Dictionary with detailed property info.
         """
+        from bs4 import BeautifulSoup
         print(f"[{self.site_name}] Parsing listing details page content.")
+        
         if not html_content:
             return {}
-        # TODO: Implement HTML parsing logic for OLX.pl listing detail page
-        # details = {}
-        # details.setdefault('title', 'N/A')
-        # details.setdefault('price', 'N/A')
-        # details.setdefault('description', 'N/A')
-        # details.setdefault('image_count', 0)
-        # return details
-        return {}
+            
+        soup = BeautifulSoup(html_content, 'html.parser')
+        details = {}
+        
+        try:
+            # Extract basic info
+            details['title'] = soup.find('h1').get_text().strip()
+            details['price'] = float(soup.find('h3').get_text()
+                                   .replace(' ', '')
+                                   .replace('zł', '')
+                                   .strip())
+                                   
+            # Extract description
+            description_div = soup.find('div', {'data-cy': 'ad_description'})
+            details['description'] = description_div.get_text().strip() if description_div else ''
+            
+            # Extract photos count
+            photos_div = soup.find('div', {'class': 'swiper-wrapper'})
+            details['image_count'] = len(photos_div.find_all('img')) if photos_div else 0
+            
+            # Extract additional parameters
+            params = {}
+            for param in soup.find_all('p', class_='css-b5m1rv'):
+                key = param.find('span').get_text().strip()
+                value = param.find_next_sibling('p').get_text().strip()
+                params[key] = value
+            details.update(params)
+            
+        except (AttributeError, ValueError) as e:
+            print(f"Error parsing listing details: {e}")
+            
+        return details
