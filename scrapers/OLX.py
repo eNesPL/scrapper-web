@@ -16,17 +16,25 @@ class OLXScraper(BaseScraper):
                          notification_manager=notification_manager)
         # self.base_url = "https://www.olx.pl" # Example base URL
 
-    def fetch_listings_page(self, search_criteria):
+    def fetch_listings_page(self, search_criteria, page=1):
         """
-        Fetches the HTML content of the main listings page from OLX.pl.
+        Fetches the HTML content of the listings page from OLX.pl.
         :param search_criteria: dict, search parameters (e.g., location, property_type).
+        :param page: int, page number to fetch (default: 1)
         :return: HTML content (str) or None.
         """
-        print(f"[{self.site_name}] Fetching listings page with criteria: {search_criteria}")
-        url = "https://www.olx.pl/nieruchomosci/mieszkania/sprzedaz/gliwice/?search%5Bfilter_float_price:to%5D=300000&search%5Bfilter_float_m:from%5D=25&search%5Bfilter_enum_rooms%5D%5B0%5D=two&search%5Bfilter_enum_rooms%5D%5B1%5D=three"
+        print(f"[{self.site_name}] Fetching page {page} with criteria: {search_criteria}")
+        base_url = "https://www.olx.pl/nieruchomosci/mieszkania/sprzedaz/gliwice/"
+        params = {
+            'search[filter_float_price:to]': 300000,
+            'search[filter_float_m:from]': 25,
+            'search[filter_enum_rooms][0]': 'two',
+            'search[filter_enum_rooms][1]': 'three',
+            'page': page
+        }
         
         try:
-            response = requests.get(url)
+            response = requests.get(base_url, params=params)
             response.raise_for_status()
             return response.text
         except requests.exceptions.RequestException as e:
