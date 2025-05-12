@@ -126,10 +126,25 @@ class OLXScraper(BaseScraper):
                 print(f"Error parsing listing: {e}")
                 continue
                 
-        # Check for next page
-        next_page_btn = soup.find('a', href=lambda x: x and 'page=' in x)
-        has_next_page = bool(next_page_btn)
+        # Improved pagination detection
+        pagination = soup.find('div', class_='pagination-list')
+        has_next_page = False
+        current_page = None
         
+        if pagination:
+            page_links = pagination.find_all('a')
+            current_page_item = pagination.find('li', class_='css-1mi714g')  # Current page has different class
+            
+            if current_page_item:
+                current_page = int(current_page_item.text.strip())
+                next_page_item = current_page_item.find_next_sibling('li')
+                
+                if next_page_item and next_page_item.find('a'):
+                    has_next_page = True
+            else:
+                # Fallback check if pagination exists but current page not found
+                has_next_page = len(page_links) > 0
+                
         return listings, has_next_page
 
     def fetch_listing_details_page(self, listing_url):
