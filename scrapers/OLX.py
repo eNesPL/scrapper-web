@@ -11,6 +11,8 @@ class OLXScraper(BaseScraper):
     Scraper for OLX.pl real estate listings.
     """
 
+    USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36'
+
     def __init__(self, db_manager=None, notification_manager=None):
         super().__init__(site_name="OLX.pl",
                          db_manager=db_manager,
@@ -34,8 +36,10 @@ class OLXScraper(BaseScraper):
             'page': page
         }
         
+        headers = {'User-Agent': self.USER_AGENT}
+        
         try:
-            response = requests.get(base_url, params=params)
+            response = requests.get(base_url, params=params, headers=headers, timeout=10)
             response.raise_for_status()
             return response.text
         except requests.exceptions.RequestException as e:
