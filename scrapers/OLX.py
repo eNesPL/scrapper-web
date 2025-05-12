@@ -126,25 +126,26 @@ class OLXScraper(BaseScraper):
                 print(f"Error parsing listing: {e}")
                 continue
                 
-        # Improved pagination detection
-        pagination = soup.find('div', class_='pagination-list')
+        # Improved pagination detection using the provided HTML structure
+        pagination = soup.find('ul', {'data-testid': 'pagination-list'})
         has_next_page = False
-        current_page = None
         
         if pagination:
-            page_links = pagination.find_all('a')
-            current_page_item = pagination.find('li', class_='css-1mi714g')  # Current page has different class
+            # Check for active page and next page arrow
+            active_page = pagination.find('li', class_='pagination-item__active')
+            next_page_arrow = pagination.find('a', {'data-testid': 'pagination-forward'})
             
-            if current_page_item:
-                current_page = int(current_page_item.text.strip())
-                next_page_item = current_page_item.find_next_sibling('li')
-                
-                if next_page_item and next_page_item.find('a'):
-                    has_next_page = True
-            else:
-                # Fallback check if pagination exists but current page not found
-                has_next_page = len(page_links) > 0
-                
+            # If there's a forward arrow, there's a next page
+            has_next_page = next_page_arrow is not None
+            
+            # Additional check: if current page is last numbered page
+            if active_page:
+                page_numbers = [li.get_text() for li in pagination.find_all('li') if li.get_text().isdigit()]
+                if page_numbers:
+                    last_page = max(map(int, page_numbers))
+                    current_page = int(active_page.get_text())
+                    has_next_page = current_page < last_page
+
         return listings, has_next_page
 
     def fetch_listing_details_page(self, listing_url):
