@@ -204,43 +204,115 @@ class NieruchomosciOnlineScraper(BaseScraper):
 
         details['title'] = title_text
 
-        # Price
-        # Example HTML: <div class="price-wrapper"> <strong data-v-0f534888>299&nbsp;000&nbsp;zł</strong> ... </div>
-        price_strong_tag = soup.select_one('div.price-wrapper > strong')
-        if price_strong_tag:
-            details['price'] = price_strong_tag.get_text(strip=True).replace('\xa0', ' ')
-        else: # Fallback for other price structures, e.g. section with data-id="section-price"
+        # Price & Area
+        # Primary attempt based on observed HTML: <div class="price-wrapper"> <strong>PRICE</strong> <span>AREA</span>...</div>
+        # XPath suggests a structure like <p>...<span>PRICE</span><span>AREA</span>...</p> which is different.
+        # We will try multiple selectors.
+        price_text = 'N/A'
+        area_text = 'N/A'
+
+        price_wrapper = soup.find('div', class_='price-wrapper')
+        if price_wrapper:
+            price_strong_tag = price_wrapper.find('strong')
+            if price_strong_tag:
+                price_text = price_strong_tag.get_text(strip=True).replace('\xa0', ' ')
+            # Area might be a span sibling or inside another tag within price_wrapper
+            area_span = price_wrapper.find('span', class_='size') # Example class, adjust if needed
+            if area_span and 'm²' in area_span.get_text():
+                 area_text = area_span.get_text(strip=True).replace('\xa0', ' ')
+            elif price_strong_tag: # Check siblings of price if area span not found directly
+                area_sibling = price_strong_tag.find_next_sibling('span')
+                if area_sibling and 'm²' in area_sibling.get_text():
+                     area_text = area_sibling.get_text(strip=True).replace('\xa0', ' ')
+
+        # Fallback based on XPath hint (p > span) - less reliable without specific classes/IDs
+        if price_text == 'N/A':
+            # Look for a <p> tag containing both price (zł) and area (m²) spans
+            potential_p_tags = soup.find_all('p')
+            for p_tag in potential_p_tags:
+                spans = p_tag.find_all('span', recursive=False)
+                if len(spans) >= 2:
+                    # Check if spans contain price and area patterns
+                    span1_text = spans[0].get_text(strip=True).replace('\xa0', ' ')
+                    span2_text = spans[1].get_text(strip=True).replace('\xa0', ' ')
+                    if 'zł' in span1_text and 'm²' in span2_text:
+                        price_text = span1_text
+                        area_text = span2_text
+                        break # Found a match based on p > span structure
+                    elif 'zł' in span2_text and 'm²' in span1_text: # Check swapped order
+                        price_text = span2_text
+                        area_text = span1_text
+                        break
+
+        # Fallback for price using section[data-id='section-price']
+        if price_text == 'N/A':
             price_section = soup.find('section', attrs={'data-id': 'section-price'})
             if price_section:
-                price_val_tag = price_section.find(['strong', 'div'], class_=['price', 'value', 'amount']) # Common classes
+                price_val_tag = price_section.find(['strong', 'div'], class_=['price', 'value', 'amount'])
                 if price_val_tag:
-                     details['price'] = price_val_tag.get_text(strip=True).replace('\xa0', ' ')
-        details.setdefault('price', 'N/A')
+                    price_text = price_val_tag.get_text(strip=True).replace('\xa0', ' ')
 
+        # Fallback for area by searching common parameter lists/tables if not found near price
+        if area_text == 'N/A':
+             # Look in definition lists (dl), tables (table), or unordered lists (ul) for area
+             param_containers = soup.find_all(['dl', 'table', 'ul'], class_=['parameters', 'details-list', 'specification']) # Add more potential classes
+             for container in param_containers:
+                 items = container.find_all(['dd', 'td', 'li'])
+                 for item in items:
+                     item_text = item.get_text(strip=True)
+                     if 'm²' in item_text and 'zł/m²' not in item_text: # Ensure it's area, not price per m2
+                         # Try to find the corresponding label (dt, th, previous li/span)
+                         label_tag = item.find_previous(['dt', 'th']) or item.find_previous_sibling(['dt', 'th', 'span', 'li'])
+                         if label_tag and ('powierzchnia' in label_tag.get_text(strip=True).lower() or 'area' in label_tag.get_text(strip=True).lower()):
+                            area_text = item_text.replace('\xa0', ' ')
+                            break
+                 if area_text != 'N/A': break # Found area in parameters
+
+        details['price'] = price_text
+        details['area_m2'] = area_text # Assuming area includes 'm²' unit
 
         # Description
-        # Example HTML: <div data-v-9c715a1c id="description" class="description"> <div data-v-9c715a1c class="text-content"> ... </div></div>
+        # XPath suggests specific divs, but using IDs/classes is more robust.
+        # Try primary target: div#description > div.text-content
+        description_text = 'N/A'
         description_div = soup.find('div', id='description')
+        if not description_div: # Fallback: find div with class 'description'
+            description_div = soup.find('div', class_='description')
+        # Further fallback: find section with data-id='description'
+        if not description_div:
+             description_div = soup.find('section', attrs={'data-id': 'description'})
         if description_div:
+            # Try finding a specific content container within the description div
             text_content_div = description_div.find('div', class_='text-content')
+            if not text_content_div: # Another common pattern
+                 text_content_div = description_div.find('div', class_='description__body')
+
             if text_content_div:
-                # Collect all p tags and join their text
-                paragraphs = text_content_div.find_all('p')
-                details['description'] = "\n".join(p.get_text(strip=True) for p in paragraphs if p.get_text(strip=True))
-            else: # Fallback if no 'text-content' div, take all text from #description
-                details['description'] = description_div.get_text(separator="\n", strip=True)
-        details.setdefault('description', 'N/A')
-        if not details['description'] or details['description'].isspace(): # Check if description is empty or just whitespace
-            # Fallback: look for a div with class "description" if id="description" is not fruitful
-            desc_class_div = soup.find('div', class_='description')
-            if desc_class_div and desc_class_div.find('div', class_='text-content'):
-                 paragraphs = desc_class_div.find('div', class_='text-content').find_all('p')
-                 details['description'] = "\n".join(p.get_text(strip=True) for p in paragraphs if p.get_text(strip=True))
-            elif desc_class_div: # Take all text from div.description
-                 details['description'] = desc_class_div.get_text(separator="\n", strip=True)
+                # Collect text from paragraphs or the container itself if no paragraphs
+                paragraphs = text_content_div.find_all('p', recursive=False) # Direct children first
+                if paragraphs:
+                    description_text = "\n".join(p.get_text(strip=True) for p in paragraphs if p.get_text(strip=True))
+                else: # If no <p>, take the whole text content
+                    description_text = text_content_div.get_text(separator="\n", strip=True)
+            else:
+                # Fallback: take all text directly from the found description_div
+                # Exclude potential script/style tags if any are nested
+                for tag in description_div(['script', 'style']):
+                    tag.decompose()
+                description_text = description_div.get_text(separator="\n", strip=True)
+
+        # Clean up description if found
+        if description_text and description_text != 'N/A':
+             # Remove common boilerplate/agent signatures if possible (example pattern)
+             lines = description_text.splitlines()
+             filtered_lines = [line for line in lines if "oferta wysłana z programu" not in line.lower() and "asari crm" not in line.lower()]
+             # Remove leading/trailing whitespace and filter empty lines
+             description_text = "\n".join(line.strip() for line in filtered_lines if line.strip())
+
+        details['description'] = description_text if description_text else 'N/A'
 
 
-        # Image Count
+        # Image Count (Keeping existing logic as it wasn't flagged)
         # Example HTML: <div class="gallery__counter">1/20</div>
         # Or count images in a gallery container
         image_count = 0
@@ -262,10 +334,14 @@ class NieruchomosciOnlineScraper(BaseScraper):
         details['image_count'] = image_count
         
         # Ensure all tracked fields have a default
+        # Ensure all tracked fields have a default value
         details.setdefault('title', 'N/A')
         details.setdefault('price', 'N/A')
+        details.setdefault('area_m2', 'N/A') # Ensure area is also defaulted
         details.setdefault('description', 'N/A')
         details.setdefault('image_count', 0)
 
-        print(f"[{self.site_name}] Parsed details: Title: {details.get('title', 'N/A')[:30]}..., Price: {details.get('price', 'N/A')}, Image Count: {details.get('image_count', 0)}")
+        print(f"[{self.site_name}] Parsed details: Title: {details.get('title', 'N/A')[:30]}..., Price: {details.get('price', 'N/A')}, Area: {details.get('area_m2', 'N/A')}, Image Count: {details.get('image_count', 0)}")
+        # Add description length for debugging if needed
+        # print(f"[{self.site_name}] Description length: {len(details.get('description', ''))}")
         return details
