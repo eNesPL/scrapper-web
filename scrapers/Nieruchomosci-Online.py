@@ -332,16 +332,60 @@ class NieruchomosciOnlineScraper(BaseScraper):
                 image_count = len(images_in_gallery)
 
         details['image_count'] = image_count
-        
-        # Ensure all tracked fields have a default
+
+        # Extract additional details like floor, rooms, year_built, etc.
+        details_container = soup.find('div', class_='table-d__changer') # Based on provided HTML snippet
+        if not details_container: # Fallback for similar containers
+             details_container = soup.find('div', class_='parameters') # Common alternative class
+             # Add more fallbacks if needed based on page structure variations
+
+        if details_container:
+            items = details_container.find_all('div', class_='table-d__changer--item')
+            if not items: # Fallback if items are direct children or use different tags/classes
+                 items = details_container.find_all(['li', 'div'], class_=['parameter', 'details-item']) # Example fallback classes
+
+            param_map = {
+                'Piętro:': 'floor',
+                'Liczba pokoi:': 'rooms',
+                'Rok budowy:': 'year_built',
+                'Miejsce parkingowe:': 'parking',
+                'Stan mieszkania:': 'condition',
+                # Add other potential labels here if needed
+            }
+
+            for item in items:
+                label_tag = item.find('p', class_='body-md')
+                value_container = item.find('div', class_='col-b')
+
+                if label_tag and value_container:
+                    label_text = label_tag.get_text(strip=True)
+                    if label_text in param_map:
+                        key = param_map[label_text]
+                        # Handle floor specifically as it has multiple spans (e.g., "4 / 4")
+                        if key == 'floor':
+                            floor_spans = value_container.find_all('span', class_='fsize-a')
+                            value_text = "".join(span.get_text(strip=True) for span in floor_spans)
+                        else:
+                            value_span = value_container.find('span', class_='fsize-a')
+                            value_text = value_span.get_text(strip=True) if value_span else '-'
+                        
+                        details[key] = value_text if value_text != '-' else 'N/A'
+
+
         # Ensure all tracked fields have a default value
         details.setdefault('title', 'N/A')
         details.setdefault('price', 'N/A')
-        details.setdefault('area_m2', 'N/A') # Ensure area is also defaulted
+        details.setdefault('area_m2', 'N/A')
         details.setdefault('description', 'N/A')
         details.setdefault('image_count', 0)
+        # Add defaults for the new fields
+        details.setdefault('floor', 'N/A')
+        details.setdefault('rooms', 'N/A')
+        details.setdefault('year_built', 'N/A')
+        details.setdefault('parking', 'N/A')
+        details.setdefault('condition', 'N/A')
 
-        print(f"[{self.site_name}] Parsed details: Title: {details.get('title', 'N/A')[:30]}..., Price: {details.get('price', 'N/A')}, Area: {details.get('area_m2', 'N/A')}, Image Count: {details.get('image_count', 0)}")
-        # Add description length for debugging if needed
-        # print(f"[{self.site_name}] Description length: {len(details.get('description', ''))}")
+
+        print(f"[{self.site_name}] Parsed details: Title: {details.get('title', 'N/A')[:30]}..., Price: {details.get('price', 'N/A')}, Area: {details.get('area_m2', 'N/A')}, Rooms: {details.get('rooms', 'N/A')}, Floor: {details.get('floor', 'N/A')}, Image Count: {details.get('image_count', 0)}")
+        # print(f"[{self.site_name}] Full parsed details: {details}") # Uncomment for full details debug
         return details
