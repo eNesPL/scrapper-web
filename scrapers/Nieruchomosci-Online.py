@@ -371,6 +371,69 @@ class NieruchomosciOnlineScraper(BaseScraper):
                         
                         details[key] = value_text if value_text != '-' else 'N/A'
 
+        # Extract details from the main details table (div#detailsTable)
+        details_table = soup.find('div', id='detailsTable')
+        if details_table:
+            list_items = details_table.find_all('li', class_='body-md')
+            
+            details_map = {
+                'Typ oferty': 'offer_type',
+                'Rynek': 'market',
+                'Forma własności': 'ownership',
+                'Charakterystyka mieszkania': 'characteristics', # Contains area, rooms, condition - might refine later
+                'Budynek': 'building_type',
+                'Rozkład mieszkania': 'layout', # Contains floor, layout type
+                'Powierzchnia dodatkowa': 'additional_area',
+                'Kuchnia': 'kitchen_type',
+                'Media': 'media',
+                'Miejsce parkingowe': 'parking_details', # Different from the structured parking field
+                'Źródło': 'source',
+                # Internal listing ID might be in an 'empty' li after 'Źródło'
+            }
+
+            for item in list_items:
+                strong_tag = item.find('strong')
+                if strong_tag:
+                    label = strong_tag.get_text(strip=True).replace(':', '')
+                    if label in details_map:
+                        key = details_map[label]
+                        # Get value - might be in a span, a, or just text after strong
+                        value_tag = item.find(['span', 'a'])
+                        if value_tag:
+                             # Special handling for characteristics, layout, etc. if needed
+                             if key == 'characteristics':
+                                 # Example: "52,50 m², 2 pokoje, 1 łazienka; stan: do remontu"
+                                 # Could parse this further if needed, but for now store raw
+                                 details[key] = value_tag.get_text(separator=" ", strip=True).replace('\xa0', ' ')
+                                 # Extract condition if not already found
+                                 if details.get('condition', 'N/A') == 'N/A' and 'stan:' in value_tag.get_text():
+                                     condition_match = re.search(r'stan:\s*(.*)', value_tag.get_text(strip=True), re.IGNORECASE)
+                                     if condition_match:
+                                         details['condition'] = condition_match.group(1).strip()
+                             elif key == 'layout':
+                                 # Example: "piętro 4/4, jednostronne, dwustronne"
+                                 details[key] = value_tag.get_text(separator=" ", strip=True)
+                                 # Extract floor if not already found
+                                 if details.get('floor', 'N/A') == 'N/A' and 'piętro' in value_tag.get_text():
+                                     floor_match = re.search(r'piętro\s*([\d/]+)', value_tag.get_text(strip=True), re.IGNORECASE)
+                                     if floor_match:
+                                         details['floor'] = floor_match.group(1).strip()
+                             else:
+                                details[key] = value_tag.get_text(separator=" ", strip=True).replace('\xa0', ' ')
+                        else:
+                            # If no span/a, try getting text after strong tag
+                            value_text = strong_tag.next_sibling
+                            if value_text and isinstance(value_text, str):
+                                details[key] = value_text.strip().replace('\xa0', ' ')
+                    elif label == '': # Handle the internal listing ID case (label is '&nbsp;')
+                         prev_li = item.find_previous_sibling('li')
+                         if prev_li and prev_li.find('strong') and prev_li.find('strong').get_text(strip=True).startswith('Źródło'):
+                             id_span = item.find('span')
+                             if id_span and 'numer ogłoszenia:' in id_span.get_text():
+                                 match = re.search(r'numer ogłoszenia:\s*([\w-]+)', id_span.get_text())
+                                 if match:
+                                     details['listing_id_internal'] = match.group(1).strip()
+
 
         # Ensure all tracked fields have a default value
         details.setdefault('title', 'N/A')
@@ -382,8 +445,21 @@ class NieruchomosciOnlineScraper(BaseScraper):
         details.setdefault('floor', 'N/A')
         details.setdefault('rooms', 'N/A')
         details.setdefault('year_built', 'N/A')
-        details.setdefault('parking', 'N/A')
-        details.setdefault('condition', 'N/A')
+        details.setdefault('parking', 'N/A') # From structured data
+        details.setdefault('condition', 'N/A') # From structured data or characteristics
+        # Add defaults for fields from detailsTable
+        details.setdefault('offer_type', 'N/A')
+        details.setdefault('market', 'N/A')
+        details.setdefault('ownership', 'N/A')
+        details.setdefault('characteristics', 'N/A')
+        details.setdefault('building_type', 'N/A')
+        details.setdefault('layout', 'N/A')
+        details.setdefault('additional_area', 'N/A')
+        details.setdefault('kitchen_type', 'N/A')
+        details.setdefault('media', 'N/A')
+        details.setdefault('parking_details', 'N/A') # From details list
+        details.setdefault('source', 'N/A')
+        details.setdefault('listing_id_internal', 'N/A')
 
 
         print(f"[{self.site_name}] Parsed details: Title: {details.get('title', 'N/A')[:30]}..., Price: {details.get('price', 'N/A')}, Area: {details.get('area_m2', 'N/A')}, Rooms: {details.get('rooms', 'N/A')}, Floor: {details.get('floor', 'N/A')}, Image Count: {details.get('image_count', 0)}")
