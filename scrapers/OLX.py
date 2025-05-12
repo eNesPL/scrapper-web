@@ -55,7 +55,7 @@ class OLXScraper(BaseScraper):
         :return: Tuple of (listings, has_next_page) where listings is a list of dicts with at least 'url',
                  and has_next_page is a boolean indicating if there are more pages.
         """
-        from bs4 import BeautifulSoup
+        # BeautifulSoup jest już importowany na poziomie modułu
         print(f"[{self.site_name}] Parsing listings page content.")
         
         if not html_content:
@@ -63,12 +63,43 @@ class OLXScraper(BaseScraper):
             
         soup = BeautifulSoup(html_content, 'html.parser')
         listings = []
-        
-        # Find all listing containers using updated selectors
-        for listing in soup.find_all('div', {'data-cy': 'l-card'}):
+        stop_processing_page = False # Flaga: czy znaleziono separator na tej stronie
+
+        # Znajdź główny kontener ofert, np. <div data-testid="listing-grid">
+        main_content_area = soup.find('div', {'data-testid': 'listing-grid'})
+
+        if not main_content_area:
+            print(f"[{self.site_name}] Warning: Could not find 'listing-grid'. Assuming no listings or end of relevant content.")
+            return [], False # Brak ofert, brak następnej strony
+
+        # Iteruj po bezpośrednich dzieciach (typu div) głównego kontenera ofert
+        for item_container in main_content_area.find_all('div', recursive=False):
+            # 1. Sprawdź, czy item_container jest separatorem
+            # Separator to <div class="css-wsrviy">...</div>
+            if 'css-wsrviy' in item_container.get('class', []):
+                print(f"[{self.site_name}] Found 'further distance' separator: {item_container.get('class')}. Stopping parsing for this page.")
+                stop_processing_page = True
+                break # Koniec przetwarzania tej strony
+
+            # 2. Jeśli nie separator, spróbuj znaleźć w nim kartę oferty
+            # Karta oferty to <div data-cy="l-card">
+            listing_card = None
+            if item_container.get('data-cy') == 'l-card':
+                listing_card = item_container
+            else:
+                # Sprawdź, czy 'l-card' jest dzieckiem 'item_container'
+                # (może być zagnieżdżony np. w <div class="css-1sw7q4x">)
+                potential_card = item_container.find('div', {'data-cy': 'l-card'})
+                if potential_card:
+                    listing_card = potential_card
+            
+            if not listing_card: # To nie separator i nie znaleziono w nim karty
+                continue
+
+            # Mamy listing_card, przetwarzamy
             try:
                 # Get listing URL
-                title_div = listing.find('div', {'data-cy': 'ad-card-title'})
+                title_div = listing_card.find('div', {'data-cy': 'ad-card-title'})
                 link = title_div.find('a') if title_div else None
                 if not link or not link.get('href'):
                     continue
@@ -83,18 +114,18 @@ class OLXScraper(BaseScraper):
                 title = link.get_text().strip() if link else None
                 
                 # Get price
-                price_element = listing.find('p', {'data-testid': 'ad-price'})
+                price_element = listing_card.find('p', {'data-testid': 'ad-price'})
                 price = None
                 if price_element:
                     try:
-                        import re
+                        # re jest już importowany na poziomie modułu
                         price_text = re.sub(r'[^\d]', '', price_element.get_text())  # Usuń wszystkie niecyfrowe znaki
                         price = float(price_text) if price_text else None
                     except (ValueError, AttributeError):
                         pass
                 
                 # Get location and date
-                location_date = listing.find('p', {'data-testid': 'location-date'})
+                location_date = listing_card.find('p', {'data-testid': 'location-date'})
                 location = ''
                 date = ''
                 if location_date:
@@ -103,9 +134,9 @@ class OLXScraper(BaseScraper):
                     date = location_parts[1].strip() if len(location_parts) > 1 else ''
                 
                 # Get size
-                size = None
-                size_container = listing.find('div', {'color': 'text-global-secondary'})
-                size = None
+                # size = None # Niepotrzebne, bo jest deklarowane niżej
+                size_container = listing_card.find('div', {'color': 'text-global-secondary'})
+                size = None # Zresetuj size dla każdej karty
                 if size_container:
                     size_element = size_container.find('span', class_='css-6as4g5')
                     if size_element:
@@ -125,11 +156,22 @@ class OLXScraper(BaseScraper):
                 }
                 listings.append(listing_data)
             except Exception as e:
-                print(f"Error parsing listing: {e}")
+                error_context = str(listing_card)[:200] # Pierwsze 200 znaków karty dla kontekstu błędu
+                print(f"Error parsing listing: {e} (context: {error_context}...)")
                 continue
                 
-        # Nowa logika paginacji - kontynuuj dopóki są ogłoszenia
-        has_next_page = len(listings) > 0  # Kontynuuj jeśli są jakiekolwiek ogłoszenia na obecnej stronie
+        # Logika określająca, czy jest następna strona
+        if stop_processing_page:
+            # Znaleziono separator, więc nie ma sensu iść na następną stronę z tego samego wyszukiwania
+            has_next_page = False
+        else:
+            # Nie znaleziono separatora. Użyj istniejącej logiki: są oferty -> może być następna strona.
+            # To jest uproszczenie. Prawdziwa paginacja powinna sprawdzać istnienie przycisku "Next".
+            # Jeśli `main_content_area` nie został znaleziony (i zwrócono wcześniej), to ten kod nie zostanie osiągnięty.
+            # Jeśli `main_content_area` istniał, ale nie było ofert (np. pusta strona),
+            # `listings` będzie puste, `has_next_page` będzie `False`.
+            # Jeśli były oferty i nie było separatora, `has_next_page` będzie `True`.
+            has_next_page = len(listings) > 0 
 
         return listings, has_next_page
 
