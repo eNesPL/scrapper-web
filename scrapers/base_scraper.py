@@ -63,132 +63,135 @@ class BaseScraper(ABC):
 
     def scrape(self, search_criteria):
         """
-        Orchestrates the scraping process, including DB interaction and notifications.
+        Orchestrates the scraping process with pagination support.
         """
         if not self.db_manager or not self.notification_manager:
             print(f"[{self.site_name}] Error: DatabaseManager or NotificationManager not provided. Cannot proceed with full scrape.")
-            return [] 
+            return []
 
         print(f"[{self.site_name}] Starting scrape with criteria: {search_criteria}")
         
-        listings_page_html = self.fetch_listings_page(search_criteria)
-        if not listings_page_html:
-            print(f"[{self.site_name}] Failed to fetch listings page. Aborting.")
-            return []
-
-        listings_summaries = self.parse_listings(listings_page_html)
-        if not listings_summaries:
-            print(f"[{self.site_name}] No listings found or failed to parse listings page. Aborting.")
-            return []
-
-        print(f"[{self.site_name}] Found {len(listings_summaries)} listings/summaries from listings page.")
-
         processed_properties_data = []
-        for i, summary in enumerate(listings_summaries):
-            listing_url = summary.get('url')
+        page = 1
+        while True:
+            print(f"[{self.site_name}] Processing page {page}")
             
-            print(f"[{self.site_name}] Processing listing {i+1}/{len(listings_summaries)}: {listing_url or 'Summary without URL'}")
+            # Pobierz i przetwórz stronę
+            listings_page_html = self.fetch_listings_page(search_criteria, page)
+            if not listings_page_html:
+                print(f"[{self.site_name}] Failed to fetch page {page}")
+                break
 
-            if not listing_url:
-                print(f"[{self.site_name}] Warning: Listing summary does not contain a 'url'. Skipping.")
-                continue
-
-            details_page_html = self.fetch_listing_details_page(listing_url)
-            if not details_page_html:
-                print(f"[{self.site_name}] Failed to fetch details page for {listing_url}. Skipping.")
-                if self.db_manager.get_listing_by_url(listing_url):
-                    self.db_manager.update_last_checked(listing_url)
-                continue
-
-            detailed_data = self.parse_listing_details(details_page_html)
-            if not detailed_data:
-                print(f"[{self.site_name}] Failed to parse details for {listing_url}. Skipping.")
-                if self.db_manager.get_listing_by_url(listing_url):
-                    self.db_manager.update_last_checked(listing_url)
-                continue
+            listings_summaries, has_next_page = self.parse_listings(listings_page_html)
             
-            current_listing_data = {
-                **summary, 
-                **detailed_data,
-                'url': listing_url,
-                'site_name': self.site_name
-            }
-            
-            # Ensure all tracked fields and other key fields have a default if not provided by scraper
-            # This includes fields for DB columns and notification tracking.
-            key_fields_to_default = set(TRACKED_FIELDS_FOR_NOTIFICATION + ['title', 'first_image_url'])
-            for field in key_fields_to_default:
-                current_listing_data.setdefault(field, None)
-            # Ensure image_count has a numeric default if None
-            if current_listing_data.get('image_count') is None:
-                 current_listing_data['image_count'] = 0
+            if not listings_summaries:
+                print(f"[{self.site_name}] No listings on page {page}")
+                break
 
+            print(f"[{self.site_name}] Found {len(listings_summaries)} listings on page {page}")
 
-            existing_listing_row = self.db_manager.get_listing_by_url(listing_url)
+            # Przetwarzanie ogłoszeń
+            for i, summary in enumerate(listings_summaries):
+                listing_url = summary.get('url')
+                
+                print(f"[{self.site_name}] Processing listing {i+1}/{len(listings_summaries)}: {listing_url or 'Summary without URL'}")
 
-            if not existing_listing_row:
-                db_insert_data = {
+                if not listing_url:
+                    print(f"[{self.site_name}] Warning: Listing summary does not contain a 'url'. Skipping.")
+                    continue
+
+                details_page_html = self.fetch_listing_details_page(listing_url)
+                if not details_page_html:
+                    print(f"[{self.site_name}] Failed to fetch details page for {listing_url}. Skipping.")
+                    if self.db_manager.get_listing_by_url(listing_url):
+                        self.db_manager.update_last_checked(listing_url)
+                    continue
+
+                detailed_data = self.parse_listing_details(details_page_html)
+                if not detailed_data:
+                    print(f"[{self.site_name}] Failed to parse details for {listing_url}. Skipping.")
+                    if self.db_manager.get_listing_by_url(listing_url):
+                        self.db_manager.update_last_checked(listing_url)
+                    continue
+                
+                current_listing_data = {
+                    **summary, 
+                    **detailed_data,
                     'url': listing_url,
-                    'site_name': self.site_name,
-                    'title': current_listing_data.get('title'),
-                    'price': current_listing_data.get('price'),
-                    'description': current_listing_data.get('description'),
-                    'image_count': current_listing_data.get('image_count'),
-                    'first_image_url': current_listing_data.get('first_image_url'), # Added
-                    'raw_data': current_listing_data 
+                    'site_name': self.site_name
                 }
-                self.db_manager.add_listing(db_insert_data)
                 
-                notif_embed = self.notification_manager.format_new_listing_embed(current_listing_data)
-                self.notification_manager.send_notification(embed=notif_embed)
-                print(f"[{self.site_name}] Added new listing to DB and sent notification: {listing_url}")
+                # Ensure all tracked fields and other key fields have a default if not provided by scraper
+                key_fields_to_default = set(TRACKED_FIELDS_FOR_NOTIFICATION + ['title', 'first_image_url'])
+                for field in key_fields_to_default:
+                    current_listing_data.setdefault(field, None)
+                # Ensure image_count has a numeric default if None
+                if current_listing_data.get('image_count') is None:
+                    current_listing_data['image_count'] = 0
 
-            else:
-                update_payload_for_db = {} # Initialize payload for DB update
-                changes_for_notification = []
+                existing_listing_row = self.db_manager.get_listing_by_url(listing_url)
 
-                # Fields that have dedicated columns and might trigger notifications
-                fields_to_check_for_update = ['title', 'price', 'description', 'image_count', 'first_image_url']
-
-                for field in fields_to_check_for_update:
-                    old_value = existing_listing_row[field]
-                    new_value = current_listing_data.get(field)
-
-                    if field == 'image_count': # Specific handling for image_count type
-                        try:
-                            old_value = int(old_value) if old_value is not None else None
-                            new_value = int(new_value) if new_value is not None else None
-                        except (ValueError, TypeError):
-                            pass # Keep original values if conversion fails
-
-                    if old_value != new_value:
-                        update_payload_for_db[field] = new_value # Add to DB payload if changed
-                        if field in TRACKED_FIELDS_FOR_NOTIFICATION:
-                            changes_for_notification.append((field, str(old_value)[:50], str(new_value)[:50]))
-                
-                # Always include the full current data for the raw_data field in the DB payload
-                update_payload_for_db['raw_data'] = current_listing_data 
-                
-                # Check if there were any changes to dedicated column fields
-                dedicated_fields_changed = any(field in update_payload_for_db for field in fields_to_check_for_update)
-
-                # Always call update_listing to ensure raw_data and timestamps are updated.
-                # The update_payload_for_db will contain specific fields if they changed,
-                # and always the full current_listing_data for the 'raw_data' key.
-                print(f"[{self.site_name}] Updating existing listing (or just timestamps/raw_data) for {listing_url}. Payload keys for dedicated columns: {[k for k in update_payload_for_db if k != 'raw_data']}")
-                self.db_manager.update_listing(listing_url, update_payload_for_db)
-                
-                if changes_for_notification:
-                    print(f"[{self.site_name}] Sending notification for changes: {changes_for_notification}")
-                    notif_embed = self.notification_manager.format_updated_listing_embed(current_listing_data, changes_for_notification)
+                if not existing_listing_row:
+                    db_insert_data = {
+                        'url': listing_url,
+                        'site_name': self.site_name,
+                        'title': current_listing_data.get('title'),
+                        'price': current_listing_data.get('price'),
+                        'description': current_listing_data.get('description'),
+                        'image_count': current_listing_data.get('image_count'),
+                        'first_image_url': current_listing_data.get('first_image_url'),
+                        'raw_data': current_listing_data 
+                    }
+                    self.db_manager.add_listing(db_insert_data)
+                    
+                    notif_embed = self.notification_manager.format_new_listing_embed(current_listing_data)
                     self.notification_manager.send_notification(embed=notif_embed)
-                elif dedicated_fields_changed: # Changes in dedicated columns, but not ones tracked for notification
-                     print(f"[{self.site_name}] Updated listing in DB (non-notified dedicated fields changed): {listing_url}")
-                else: # No changes in dedicated columns, so only raw_data might have changed, plus timestamps.
-                    print(f"[{self.site_name}] No changes in dedicated fields for {listing_url}. Ensured raw_data and timestamps are current.")
+                    print(f"[{self.site_name}] Added new listing to DB and sent notification: {listing_url}")
 
-            processed_properties_data.append(current_listing_data)
-        
-        print(f"[{self.site_name}] Finished scraping. Processed {len(processed_properties_data)} properties meeting criteria.")
+                else:
+                    update_payload_for_db = {}
+                    changes_for_notification = []
+
+                    fields_to_check_for_update = ['title', 'price', 'description', 'image_count', 'first_image_url']
+
+                    for field in fields_to_check_for_update:
+                        old_value = existing_listing_row[field]
+                        new_value = current_listing_data.get(field)
+
+                        if field == 'image_count':
+                            try:
+                                old_value = int(old_value) if old_value is not None else None
+                                new_value = int(new_value) if new_value is not None else None
+                            except (ValueError, TypeError):
+                                pass
+
+                        if old_value != new_value:
+                            update_payload_for_db[field] = new_value
+                            if field in TRACKED_FIELDS_FOR_NOTIFICATION:
+                                changes_for_notification.append((field, str(old_value)[:50], str(new_value)[:50]))
+                    
+                    update_payload_for_db['raw_data'] = current_listing_data
+                    
+                    dedicated_fields_changed = any(field in update_payload_for_db for field in fields_to_check_for_update)
+
+                    print(f"[{self.site_name}] Updating existing listing (or just timestamps/raw_data) for {listing_url}. Payload keys for dedicated columns: {[k for k in update_payload_for_db if k != 'raw_data']}")
+                    self.db_manager.update_listing(listing_url, update_payload_for_db)
+                    
+                    if changes_for_notification:
+                        print(f"[{self.site_name}] Sending notification for changes: {changes_for_notification}")
+                        notif_embed = self.notification_manager.format_updated_listing_embed(current_listing_data, changes_for_notification)
+                        self.notification_manager.send_notification(embed=notif_embed)
+                    elif dedicated_fields_changed:
+                        print(f"[{self.site_name}] Updated listing in DB (non-notified dedicated fields changed): {listing_url}")
+                    else:
+                        print(f"[{self.site_name}] No changes in dedicated fields for {listing_url}. Ensured raw_data and timestamps are current.")
+
+                processed_properties_data.append(current_listing_data)
+            
+            if not has_next_page:
+                break
+            page += 1
+
+        print(f"[{self.site_name}] Finished scraping. Processed {len(processed_properties_data)} properties.")
         return processed_properties_data
 

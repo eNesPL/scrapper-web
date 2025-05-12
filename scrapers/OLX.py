@@ -45,13 +45,14 @@ class OLXScraper(BaseScraper):
         """
         Parses the listings page HTML to extract individual listing URLs or summary data.
         :param html_content: str, HTML content of the listings page.
-        :return: List of dictionaries, each with at least a 'url'.
+        :return: Tuple of (listings, has_next_page) where listings is a list of dicts with at least 'url',
+                 and has_next_page is a boolean indicating if there are more pages.
         """
         from bs4 import BeautifulSoup
         print(f"[{self.site_name}] Parsing listings page content.")
         
         if not html_content:
-            return []
+            return [], False
             
         soup = BeautifulSoup(html_content, 'html.parser')
         listings = []
@@ -84,7 +85,11 @@ class OLXScraper(BaseScraper):
                 print(f"Error parsing listing: {e}")
                 continue
                 
-        return listings
+        # Sprawdź czy jest następna strona
+        next_page_btn = soup.find('a', {'data-testid': 'pagination-forward'})
+        has_next_page = next_page_btn is not None
+        
+        return listings, has_next_page
 
     def fetch_listing_details_page(self, listing_url):
         """
