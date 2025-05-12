@@ -8,11 +8,20 @@ import json
 
 def get_listings_from_db():
     """Fetch all listings from the database"""
+    from flask import request
     db_manager = DatabaseManager(config.DATABASE_NAME)
     conn = db_manager._get_connection()
     cursor = conn.cursor()
     
-    cursor.execute("SELECT * FROM listings ORDER BY last_updated DESC")
+    sort = request.args.get('sort', 'date_desc')
+    order_by = {
+        'price_asc': 'price ASC',
+        'price_desc': 'price DESC',
+        'date_asc': 'first_seen ASC',
+        'date_desc': 'first_seen DESC'
+    }.get(sort, 'first_seen DESC')
+    
+    cursor.execute(f"SELECT * FROM listings ORDER BY {order_by}")
     rows = cursor.fetchall()
     conn.close()
     

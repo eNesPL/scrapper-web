@@ -85,6 +85,14 @@
 <body>
     <h1>Real Estate Listings</h1>
     
+    <div style="margin-bottom: 20px;">
+        <strong>Sortuj według:</strong>
+        <a href="?sort=price_asc">Cena rosnąco</a> |
+        <a href="?sort=price_desc">Cena malejąco</a> |
+        <a href="?sort=date_asc">Data dodania (najstarsze)</a> |
+        <a href="?sort=date_desc">Data dodania (najnowsze)</a>
+    </div>
+    
     <div class="listings">
         {% for listing in listings %}
         <div class="listing">
@@ -117,7 +125,8 @@
                 {% endif %}
             </div>
             <div class="last-updated">
-                Last updated: {{ listing.last_updated }}
+                Ostatnia aktualizacja: {{ listing.last_updated }}<br>
+                Data dodania: {{ listing.first_seen }}
             </div>
         </div>
         {% endfor %}
