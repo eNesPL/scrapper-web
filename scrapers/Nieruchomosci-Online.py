@@ -62,12 +62,10 @@ class NieruchomosciOnlineScraper(BaseScraper):
         soup = BeautifulSoup(html_content, 'html.parser')
         listings = []
         
-        # Listings are often in <article> tags or <div class="list__item">
-        listing_elements = soup.find_all('article', attrs={'data-id-item': True})
-        if not listing_elements:
-            listing_elements = soup.find_all('div', class_='list__item') # Fallback
+        # Listings are identified by the class 'tile'
+        listing_elements = soup.find_all(class_='tile')
 
-        print(f"[{self.site_name}] Found {len(listing_elements)} potential listing elements.")
+        print(f"[{self.site_name}] Found {len(listing_elements)} potential listing elements with class 'tile'.")
 
         for item_element in listing_elements:
             summary = {}
