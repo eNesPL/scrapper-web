@@ -311,6 +311,41 @@ class NieruchomosciOnlineScraper(BaseScraper):
 
         details['description'] = description_text if description_text else 'N/A'
 
+        # Append content from detailsWrapper to description
+        details_wrapper_div = soup.find('div', id='detailsWrapper')
+        if details_wrapper_div:
+            # Decompose map link content to avoid including its text if not desired
+            map_link_content = details_wrapper_div.find('p', id='map-link-content-bottom')
+            if map_link_content:
+                map_link_content.decompose()
+                
+            details_wrapper_text = details_wrapper_div.get_text(separator="\n", strip=True)
+            if details_wrapper_text:
+                if details['description'] == 'N/A':
+                    details['description'] = "" # Initialize if it was N/A
+                
+                # Clean up the text from detailsWrapper a bit
+                lines = details_wrapper_text.splitlines()
+                cleaned_lines = []
+                for line in lines:
+                    stripped_line = line.strip()
+                    if stripped_line: # Add only non-empty lines
+                        # Avoid redundant headers if already captured or not needed
+                        if stripped_line.lower() not in ["szczegóły ogłoszenia", "lokalizacja"]:
+                             # Replace multiple spaces/tabs with a single space
+                            cleaned_line = re.sub(r'\s{2,}', ' ', stripped_line)
+                            cleaned_lines.append(cleaned_line)
+                
+                formatted_details_wrapper_text = "\n".join(cleaned_lines)
+
+                if details['description']: # If description already has content
+                    details['description'] += f"\n\n--- Dodatkowe szczegóły ---\n{formatted_details_wrapper_text}"
+                else: # If description was empty or N/A
+                    details['description'] = formatted_details_wrapper_text
+        
+        if not details['description']: # Ensure it's 'N/A' if still empty
+            details['description'] = 'N/A'
+
 
         # Image Count (Keeping existing logic as it wasn't flagged)
         # Example HTML: <div class="gallery__counter">1/20</div>
