@@ -57,52 +57,67 @@ class OLXScraper(BaseScraper):
         soup = BeautifulSoup(html_content, 'html.parser')
         listings = []
         
-        # Find all listing containers
+        # Find all listing containers using updated selectors
         for listing in soup.find_all('div', {'data-cy': 'l-card'}):
             try:
-                listing_link = listing.find('a', href=True)
-                location_date = listing.find('p', {'data-testid': 'location-date'})
-                if location_date:
-                    elements = location_date.find_all('span')
-                    location = elements[0].get_text().strip() if len(elements) > 0 else ''
-                    date = elements[-1].get_text().strip() if len(elements) > 1 else ''
-
-                size_element = listing.find('span', {'data-testid': 'list-item'}, text=lambda t: 'm²' in t if t else False)
-                size = None
-                if size_element:
-                    size_text = size_element.get_text().replace(' m²', '').replace(',', '.').strip()
+                # Get listing URL
+                link = listing.find('a', {'data-cy': 'listing-ad-title'})
+                if not link or not link.get('href'):
+                    continue
+                    
+                url = link['href']
+                if not url.startswith('http'):
+                    url = f"https://www.olx.pl{url}"
+                
+                # Get title
+                title = link.get_text().strip() if link else None
+                
+                # Get price
+                price_element = listing.find('p', {'data-testid': 'ad-price'})
+                price = None
+                if price_element:
                     try:
+                        price_text = price_element.get_text().replace(' ', '').replace('zł', '').strip()
+                        price = float(price_text) if price_text else None
+                    except (ValueError, AttributeError):
+                        pass
+                
+                # Get location and date
+                location_date = listing.find('p', {'data-testid': 'location-date'})
+                location = ''
+                date = ''
+                if location_date:
+                    spans = location_date.find_all('span')
+                    if spans:
+                        location = spans[0].get_text().strip()
+                        if len(spans) > 1:
+                            date = spans[-1].get_text().strip()
+                
+                # Get size
+                size = None
+                size_element = listing.find('span', text=lambda t: t and 'm²' in t)
+                if size_element:
+                    try:
+                        size_text = size_element.get_text().replace('m²', '').replace(',', '.').strip()
                         size = float(size_text)
                     except ValueError:
                         pass
 
-                price = None
-                price_element = listing.find('p', {'data-testid': 'ad-price'})
-                if price_element:
-                    try:
-                        price_text = price_element.get_text()
-                        price = float(''.join(filter(str.isdigit, price_text)))
-                    except (AttributeError, ValueError):
-                        pass
-
                 listing_data = {
-                    'url': listing_link['href'] if listing_link['href'].startswith('http') else f"https://www.olx.pl{listing_link['href']}",
-                    'title': listing.find('h6').get_text().strip(),
+                    'url': url,
+                    'title': title,
                     'price': price,
                     'location': location,
                     'date_added': date,
-                    'size': size,
-                    'location': '',
-                    'date_added': '',
-                    'size': None
+                    'size': size
                 }
                 listings.append(listing_data)
-            except (AttributeError, ValueError) as e:
+            except Exception as e:
                 print(f"Error parsing listing: {e}")
                 continue
                 
-        # Sprawdź czy jest następna strona
-        next_page_btn = soup.find('a', {'href': lambda x: x and 'page=' in x and '&search' in x})
+        # Check for next page
+        next_page_btn = soup.find('a', {'data-cy': 'page-link-next'})
         has_next_page = bool(next_page_btn)
         
         return listings, has_next_page
@@ -138,30 +153,43 @@ class OLXScraper(BaseScraper):
         details = {}
         
         try:
-            # Extract basic info
-            details['title'] = soup.find('h1').get_text().strip()
-            details['price'] = float(soup.find('h3').get_text()
-                                   .replace(' ', '')
-                                   .replace('zł', '')
-                                   .strip())
-                                   
+            # Extract title
+            title = soup.find('h1', {'data-cy': 'ad_title'})
+            details['title'] = title.get_text().strip() if title else None
+            
+            # Extract price
+            price = soup.find('div', {'data-testid': 'ad-price-container'})
+            if price:
+                try:
+                    price_text = price.find('h3').get_text().replace(' ', '').replace('zł', '').strip()
+                    details['price'] = float(price_text) if price_text else None
+                except (ValueError, AttributeError):
+                    details['price'] = None
+            
             # Extract description
-            description_div = soup.find('div', {'data-cy': 'ad_description'})
-            details['description'] = description_div.get_text().strip() if description_div else ''
+            description = soup.find('div', {'data-cy': 'ad_description'})
+            details['description'] = description.get_text().strip() if description else ''
             
             # Extract photos count
-            photos_div = soup.find('div', {'class': 'swiper-wrapper'})
-            details['image_count'] = len(photos_div.find_all('img')) if photos_div else 0
+            photos = soup.find('div', {'data-testid': 'swiper-list'})
+            details['image_count'] = len(photos.find_all('img')) if photos else 0
+            
+            # Extract first image URL
+            first_img = soup.find('img', {'data-testid': 'swiper-image'})
+            details['first_image_url'] = first_img.get('src') if first_img else None
             
             # Extract additional parameters
             params = {}
-            for param in soup.find_all('p', class_='css-b5m1rv'):
-                key = param.find('span').get_text().strip()
-                value = param.find_next_sibling('p').get_text().strip()
-                params[key] = value
+            params_section = soup.find('div', {'data-cy': 'ad-parameters'})
+            if params_section:
+                for param in params_section.find_all('li'):
+                    key = param.find('span').get_text().strip() if param.find('span') else None
+                    value = param.get_text().replace(key, '').strip() if key else None
+                    if key and value:
+                        params[key] = value
             details.update(params)
             
-        except (AttributeError, ValueError) as e:
+        except Exception as e:
             print(f"Error parsing listing details: {e}")
             
         return details
