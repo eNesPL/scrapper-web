@@ -120,24 +120,24 @@ def main():
                     print(f"Error running {scraper_info['name']}: {e}")
                     continue
         else:
-            SelectedScraperClass = selected_scraper_info['class']
-            print(f"\nAttempting to run scraper: {selected_scraper_info['name']}")
-            
-            try:
-                scraper_instance = SelectedScraperClass(db_manager=db_manager, notification_manager=notification_manager)
-            except Exception as e:
-                print(f"Could not instantiate {selected_scraper_info['class_name']} with managers: {e}")
-                return
-
             search_criteria = {
-                'location': 'Sample City',
+                'location': 'Gliwice',
                 'property_type': 'apartment',
-                'min_beds': 2
+                'min_beds': 2,
+                'max_price': 300000,
+                'min_area': 25
             }
-
-            print(f"Running scraper: {scraper_instance.site_name} with criteria: {search_criteria}")
-            scraper_instance.scrape(search_criteria)
-            print(f"\nScraping process completed for {scraper_instance.site_name}.")
+            
+            print("\nRunning ALL scrapers...")
+            for scraper_info in scraper_display_list:
+                try:
+                    scraper_instance = scraper_info['class'](db_manager=db_manager, notification_manager=notification_manager)
+                    print(f"\nRunning scraper: {scraper_instance.site_name} with criteria: {search_criteria}")
+                    scraper_instance.scrape(search_criteria)
+                    print(f"Completed scraping for {scraper_instance.site_name}")
+                except Exception as e:
+                    print(f"Error running {scraper_info['name']}: {e}")
+                    continue
         # Optionally, display data from DB or summary stats here
         
     else: # Should not be reached if loop for selection works correctly
