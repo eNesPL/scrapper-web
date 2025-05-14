@@ -208,23 +208,37 @@ class sprzedajemyScraper(BaseScraper):
             if price_per_m2:
                 details['price_per_m2'] = price_per_m2.get_text(strip=True)
 
-        # Extract parameters from attributes box
+        # Extract parameters from attributes box (more robust parsing)
         params = {}
-        attributes_box = soup.find('div', class_='attributes-box')
+        attributes_box = soup.select_one('div.attributes-box ul.attribute-list')
         if attributes_box:
             for item in attributes_box.find_all('li', class_='item'):
+                # Skip separator items
+                if 'li_border_bottom' in item.get('class', []):
+                    continue
+                    
                 key = item.find('span').get_text(strip=True) if item.find('span') else None
                 value = item.find('strong').get_text(strip=True) if item.find('strong') else None
-                if key and value:
-                    # Normalize common parameter names
+                
+                if key and value and value != '-':
+                    # Clean and normalize values
+                    value = value.replace('zł/m²', '').replace('m²', '').strip()
+                    
+                    # Map to standardized keys
                     if 'Powierzchnia' in key:
-                        params['area'] = value.replace('m²', '').strip()
+                        params['area'] = value
                     elif 'Liczba pokoi' in key:
-                        params['rooms'] = value
+                        params['rooms'] = value.replace(' ', '')
                     elif 'Piętro' in key:
-                        params['floor'] = value
+                        params['floor'] = value.replace(' ', '')
+                    elif 'Rok budowy' in key:
+                        params['year_built'] = value
+                    elif 'Cena za m²' in key:
+                        params['price_per_m2'] = value
                     else:
-                        params[key] = value
+                        # Keep original key but clean it
+                        clean_key = key.replace(':', '').strip()
+                        params[clean_key] = value
         
         # Alternative way to extract area if not found in attributes box
         if 'area' not in params:
