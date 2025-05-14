@@ -100,7 +100,13 @@ def main():
     
     # Uruchom wszystkie scrapers
     if scraper_display_list:
-        if selected_scraper_info == "ALL":
+        search_criteria = {
+            'location': 'Gliwice',
+            'property_type': 'apartment', 
+            'min_beds': 2,
+            'max_price': 300000,
+            'min_area': 25
+        }
             print("\nRunning ALL scrapers...")
             search_criteria = {
                 'location': 'Gliwice',
