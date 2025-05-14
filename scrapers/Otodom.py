@@ -183,20 +183,20 @@ class OtodomScraper(BaseScraper):
             except (ValueError, TypeError):
                 details['price'] = None
 
-        # Extract description with better accuracy
+        # Extract description from multiple locations
         description = ''
         
-        # Try main description section
-        desc_section = soup.find('div', {'data-testid': 'description-text'})
-        if desc_section:
-            description = desc_section.get_text('\n').strip()
-        elif soup.find('div', {'data-cy': 'adPageAdDescription'}):
-            description = soup.find('div', {'data-cy': 'adPageAdDescription'}).get_text('\n').strip()
+        # Try new structure first
+        desc_div = soup.find('div', {'data-cy': 'adPageAdDescription'})
+        if desc_div:
+            description = desc_div.get_text('\n').strip()
         else:
-            # Fallback to content div
-            content_div = soup.select_one('div[class*="description"]')
-            if content_div:
-                description = content_div.get_text('\n').strip()
+            # Try alternative locations
+            desc_div = soup.select_one('div[class*="description"], div[class*="css-1shxysy"]')
+            if desc_div:
+                description = '\n'.join(p.get_text().strip() 
+                                      for p in desc_div.find_all(['p', 'div']) 
+                                      if p.get_text().strip())
         
         details['description'] = description or 'Brak opisu'
 
@@ -267,12 +267,23 @@ class OtodomScraper(BaseScraper):
         )
         details['floor'] = params.get('Piętro', 'N/A').split('/')[0].strip()  # Handle format like "parter/2"
 
-        # Extract images and count (new structure)
-        image_tags = soup.find_all('img', {'data-cy': 'listing-item-image-source'})
-        if not image_tags:
-            # Try alternative location for images
-            image_tags = soup.select('img[class*="css-1bmvjcs"], img[class*="carousel-image"]')
+        # Extract all images from gallery
+        image_tags = []
+        
+        # Try main gallery images
+        gallery = soup.find('div', {'data-testid': 'gallery'})
+        if gallery:
+            image_tags = gallery.find_all('img', {'src': True})
+        else:
+            # Fallback to other image locations
+            image_tags = soup.find_all('img', {
+                'data-cy': lambda x: x and 'image' in x.lower()
+            })
+            if not image_tags:
+                image_tags = soup.select('img[src*="ireland.apollo.olxcdn.com"]')
+        
         details['image_count'] = len(image_tags)
+        details['images'] = [img['src'] for img in image_tags if img.get('src')]
 
         # Add site name
         details['site_name'] = self.site_name
