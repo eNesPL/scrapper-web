@@ -183,20 +183,24 @@ class OtodomScraper(BaseScraper):
             except (ValueError, TypeError):
                 details['price'] = None
 
-        # Extract description from multiple locations
+        # Extract description with better formatting
         description = ''
         
-        # Try new structure first
+        # Try main description section
         desc_div = soup.find('div', {'data-cy': 'adPageAdDescription'})
-        if desc_div:
-            description = desc_div.get_text('\n').strip()
-        else:
+        if not desc_div:
             # Try alternative locations
             desc_div = soup.select_one('div[class*="description"], div[class*="css-1shxysy"]')
-            if desc_div:
-                description = '\n'.join(p.get_text().strip() 
-                                      for p in desc_div.find_all(['p', 'div']) 
-                                      if p.get_text().strip())
+        
+        if desc_div:
+            # Clean up description while preserving paragraphs
+            description = '\n\n'.join(
+                p.get_text().strip() 
+                for p in desc_div.find_all(['p', 'div', 'br']) 
+                if p.get_text().strip()
+            )
+            # Remove excessive empty lines
+            description = re.sub(r'\n{3,}', '\n\n', description).strip()
         
         details['description'] = description or 'Brak opisu'
 
@@ -267,13 +271,16 @@ class OtodomScraper(BaseScraper):
         )
         details['floor'] = params.get('Piętro', 'N/A').split('/')[0].strip()  # Handle format like "parter/2"
 
-        # Extract all images from gallery
+        # Extract all images and main image
         image_tags = []
+        main_image = None
         
         # Try main gallery images
         gallery = soup.find('div', {'data-testid': 'gallery'})
         if gallery:
             image_tags = gallery.find_all('img', {'src': True})
+            if image_tags:
+                main_image = image_tags[0]['src']
         else:
             # Fallback to other image locations
             image_tags = soup.find_all('img', {
@@ -281,9 +288,12 @@ class OtodomScraper(BaseScraper):
             })
             if not image_tags:
                 image_tags = soup.select('img[src*="ireland.apollo.olxcdn.com"]')
+            if image_tags:
+                main_image = image_tags[0]['src']
         
         details['image_count'] = len(image_tags)
         details['images'] = [img['src'] for img in image_tags if img.get('src')]
+        details['main_image'] = main_image
 
         # Add site name
         details['site_name'] = self.site_name
