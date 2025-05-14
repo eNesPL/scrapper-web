@@ -196,10 +196,17 @@ class sprzedajemyScraper(BaseScraper):
             if img_src and img_src.startswith(('http://', 'https://')):
                 details['main_image'] = img_src
 
-        # Extract price
-        price_span = soup.select_one('section.pricing-box strong span.price')
-        if price_span:
-            details['price'] = price_span.get_text(strip=True).replace(' ', '').replace('zł', '')
+        # Extract price from offer-price-box
+        price_box = soup.find('div', class_='offer-price-box')
+        if price_box:
+            price_span = price_box.select_one('strong.price span')
+            if price_span:
+                details['price'] = price_span.get_text(strip=True).replace(' ', '').replace('zł', '')
+            
+            # Extract price per m2 if available
+            price_per_m2 = price_box.select_one('span.pricePerMeter span.thePrice')
+            if price_per_m2:
+                details['price_per_m2'] = price_per_m2.get_text(strip=True)
 
         # Extract parameters from attributes box
         params = {}
