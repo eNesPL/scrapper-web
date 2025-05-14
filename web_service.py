@@ -50,13 +50,19 @@ def get_listings_from_db():
             
             # Use description from raw_data if available, otherwise fallback to column, then 'N/A'
             listing['description'] = description_from_raw if description_from_raw is not None else listing.get('description', 'N/A')
-            listing['main_image'] = raw_data.get('main_image') or (raw_data.get('images')[0] if raw_data.get('images') else None)  # Get main_image or first image if exists
+            # Get main image - try multiple possible fields
+            listing['main_image'] = (
+                raw_data.get('first_image_url') or 
+                raw_data.get('main_image') or 
+                (raw_data.get('images')[0] if raw_data.get('images') else None) or
+                (raw_data.get('image_urls')[0] if raw_data.get('image_urls') else None)
+            )
             
             # Ensure that empty or whitespace-only descriptions are treated as 'N/A'
             if not listing['description'] or listing['description'].isspace():
                 listing['description'] = 'N/A'
                 
-            print(f"Extracted area_m2: {listing['area_m2']} for URL: {listing.get('url')}") # Log extracted area
+            print(f"Extracted area_m2: {listing['area_m2']}, main_image: {listing['main_image']} for URL: {listing.get('url')}") # Log extracted data
         except (json.JSONDecodeError, TypeError) as e: # Added TypeError for listing.get('raw_data') if it's not a string
             print(f"Error decoding raw_data for listing {listing.get('url')}: {e}. Raw data: {listing.get('raw_data', '')[:200]}")
             listing['area_m2'] = 'N/A'
