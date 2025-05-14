@@ -143,16 +143,35 @@ class sprzedajemyScraper(BaseScraper):
         :param listing_url: str, URL of the individual listing.
         :return: HTML content (str) or None.
         """
+        import requests
+        from fake_useragent import UserAgent
+        
         print(f"[{self.site_name}] Fetching details for URL: {listing_url}")
-        # TODO: Implement actual web request to the listing_url
-        # try:
-        #     response = requests.get(listing_url, timeout=10)
-        #     response.raise_for_status()
-        #     return response.text
-        # except requests.RequestException as e:
-        #     print(f"[{self.site_name}] Error fetching listing details page {listing_url}: {e}")
-        #     return None
-        pass
+        
+        headers = {
+            'User-Agent': UserAgent().random,
+            'Accept-Language': 'pl-PL,pl;q=0.9',
+            'Referer': 'https://www.sprzedajemy.pl/'
+        }
+        
+        try:
+            response = requests.get(
+                listing_url,
+                headers=headers,
+                timeout=10,
+                allow_redirects=True
+            )
+            response.raise_for_status()
+            
+            # Check if we got a valid HTML response
+            if 'text/html' not in response.headers.get('Content-Type', ''):
+                print(f"[{self.site_name}] Invalid content type for {listing_url}")
+                return None
+                
+            return response.text
+        except requests.RequestException as e:
+            print(f"[{self.site_name}] Error fetching listing details page {listing_url}: {e}")
+            return None
 
     def parse_listing_details(self, html_content):
         """
