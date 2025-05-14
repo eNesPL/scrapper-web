@@ -76,7 +76,7 @@ class sprzedajemyScraper(BaseScraper):
         listings = []
         
         # Find all listing sections
-        for item in soup.find_all('li', class_=lambda x: x and 'offer' in x.split()):
+        for item in soup.find_all('article', class_='element'):
             try:
                 # Extract URL
                 link = item.find('a', class_='offerLink')
@@ -87,10 +87,9 @@ class sprzedajemyScraper(BaseScraper):
                 if not url.startswith('http'):
                     url = f"https://sprzedajemy.pl{url}"
                 
-                # Extract title
-                title = link.get('title', '').strip()
-                if not title:
-                    title = link.get_text(strip=True)
+                # Extract title from h2 if available
+                title_tag = item.find('h2', class_='title')
+                title = title_tag.get_text(strip=True) if title_tag else link.get('title', '').strip()
                 
                 # Extract price
                 price_tag = item.find('span', class_='price')
@@ -98,22 +97,23 @@ class sprzedajemyScraper(BaseScraper):
                 
                 # Extract basic details
                 details = {}
-                params = item.find('p', class_='attributes')
+                params = item.find('div', class_='offer-list-item-footer')
                 if params:
                     for attr in params.find_all('span', class_='attribute'):
-                        parts = attr.get_text(strip=True).split(':')
-                        if len(parts) >= 2:
-                            key = parts[0].strip()
-                            val = ':'.join(parts[1:]).strip()
-                            details[key] = val
+                        span_text = attr.get_text(strip=True)
+                        if ':' in span_text:
+                            key, val = span_text.split(':', 1)
+                            details[key.strip()] = val.strip()
                 
                 # Extract additional info
-                location = item.find('strong', class_='city').get_text(strip=True) if item.find('strong', class_='city') else None
-                date = item.find('time', class_='time')
-                date = date['datetime'] if date and date.get('datetime') else None
+                location = item.find('strong', class_='city')
+                location = location.get_text(strip=True) if location else None
+                
+                date_tag = item.find('time', class_='time')
+                date = date_tag['datetime'] if date_tag and date_tag.get('datetime') else None
                 
                 # Extract image
-                img = item.find('img', class_=lambda x: not x or 'lazy' in x.split())
+                img = item.find('img', loading='lazy')
                 image_url = img['src'] if img and img.get('src') else None
                 
                 listing_data = {
