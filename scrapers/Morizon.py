@@ -80,7 +80,7 @@ class MorizonScraper(BaseScraper):
             # URL and Title
             link_tag = item_element.find('a', href=re.compile(r'^/oferta/'))
             if not link_tag: # Try finding title link specifically
-                link_tag = item_element.find(['h2','h3'], class_=['mz-card__title', 'single-result__title--main', 'property-title'])
+                link_tag = item_element.find(['h2','h3'], class_=['8card__title', 'single-result__title--main', 'property-title'])
                 if link_tag:
                     link_tag = link_tag.find('a', href=True)
             
