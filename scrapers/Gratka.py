@@ -1,3 +1,4 @@
+import re
 import requests
 from bs4 import BeautifulSoup
 try:
@@ -289,40 +290,36 @@ class GratkaScraper(BaseScraper):
             full_description = "\n\n".join(filter(None, description_parts))
             details['description'] = full_description[:1000] + '...' if len(full_description) > 1000 else full_description
         
-        # Image count
-        # Try to find a specific gallery container
-        # Common classes for main gallery on Gratka: galleryDesktop__container, galleryViewer, listingGallery
-        gallery_container = soup.find('div', class_=['galleryDesktop__container', 'galleryViewer', 'listingGallery'])
-        if gallery_container:
-            # Count images directly within this specific gallery container
-            images_in_gallery = gallery_container.find_all('img', src=True)
-            details['image_count'] = len(images_in_gallery)
-            print(f"[{self.site_name}] Image count (gallery container): {details['image_count']}")
-            
-            # First image URL from the identified gallery container
-            if images_in_gallery:
-                img_src = images_in_gallery[0].get('src')
-                if img_src:
-                    if not img_src.startswith('http'):
-                        details['first_image_url'] = f"{self.base_url}{img_src if img_src.startswith('/') else '/' + img_src}"
-                    else:
-                        details['first_image_url'] = img_src
+        # Image count and first image
+        details['images'] = []
+        img_selectors = [
+            'div.galleryDesktop__container img',
+            'div.galleryViewer img',
+            'div.listingGallery img',
+            'img.offer-photo',
+            'img[itemprop="image"]'
+        ]
+        
+        for selector in img_selectors:
+            imgs = soup.select(selector)
+            for img in imgs:
+                img_url = img.get('data-src') or img.get('src')
+                if img_url and not any(x in img_url.lower() for x in ['placeholder', 'default']):
+                    if img_url.startswith('//'):
+                        img_url = f"https:{img_url}"
+                    elif not img_url.startswith('http'):
+                        img_url = f"{self.base_url}{img_url if img_url.startswith('/') else '/' + img_url}"
+                    if img_url not in details['images']:
+                        details['images'].append(img_url)
+        
+        if details['images']:
+            details['image_count'] = len(details['images'])
+            details['first_image_url'] = details['images'][0]
         else:
-            # Fallback if specific gallery container is not found - try to count images in main content
-            # This is less precise and might overcount.
-            main_content = soup.find('main') 
-            if main_content:
-                all_images_in_main = main_content.find_all('img', src=True)
-                details['image_count'] = len(all_images_in_main)
-                # Try to get the first image from main content as a fallback
-                if all_images_in_main and not details['first_image_url']:
-                    img_src = all_images_in_main[0].get('src')
-                    if img_src:
-                        if not img_src.startswith('http'):
-                             details['first_image_url'] = f"{self.base_url}{img_src if img_src.startswith('/') else '/' + img_src}"
-                        else:
-                            details['first_image_url'] = img_src
-            print(f"[{self.site_name}] Image count (fallback - main content): {details['image_count']}")
+            details['image_count'] = 0
+            details['first_image_url'] = None
+            
+        print(f"[{self.site_name}] Found {details['image_count']} images")
         
         print(f"[{self.site_name}] First image URL (BeautifulSoup): {details['first_image_url']}")
 
@@ -330,14 +327,27 @@ class GratkaScraper(BaseScraper):
         # --- Attempt to extract Area using BeautifulSoup as a fallback or primary if XPath failed ---
         if details['area_m2'] == 'N/A' or lxml_tree is None: # If XPath failed or lxml not available
             print(f"[{self.site_name}] Attempting to extract area using BeautifulSoup.")
-            # Common pattern: parameters are often in a list or divs.
-            # Look for a span/div containing "m²" or near a label "Powierzchnia"
-            # This is a generic example, Gratka's structure might vary.
-            # Example: <div class="parameters__value"><span>55 m²</span></div>
-            # Example: <li><span>Powierzchnia</span><span>55 m²</span></li>
+            # Nowe podejście do wyszukiwania powierzchni
+            area_selectors = [
+                ('div.parameters__item', 'Powierzchnia'),
+                ('div.technical-data__item', 'Powierzchnia'),
+                ('div.offer-details__item', 'Powierzchnia'),
+                ('div.summaryTable__row', 'Powierzchnia')
+            ]
             
-            # Try finding a parameter list/section first
-            parameters_section = soup.find('div', class_=['parameters', 'listingAttributes', 'details_param', 'summaryTable']) # Common class names, added summaryTable
+            for selector, keyword in area_selectors:
+                elements = soup.select(selector)
+                for element in elements:
+                    if keyword in element.get_text():
+                        # Spróbuj znaleźć wartość liczbową z jednostką
+                        area_match = re.search(r'(\d+[\.,]?\d*)\s*(m²|m2|m\s*²)', element.get_text(), re.IGNORECASE)
+                        if area_match:
+                            area_value = area_match.group(1).replace(',', '.')
+                            details['area_m2'] = f"{area_value} {area_match.group(2)}"
+                            print(f"[{self.site_name}] Found area: {details['area_m2']}")
+                            break
+                if details['area_m2'] != 'N/A':
+                    break
             if parameters_section:
                 # Try to find a label "Powierzchnia" and get its value
                 area_label_tag = parameters_section.find(lambda tag: tag.name in ['span', 'div', 'dt', 'th'] and "Powierzchnia" in tag.get_text() and "całkowita" not in tag.get_text()) # Avoid "Powierzchnia całkowita" if it's different
