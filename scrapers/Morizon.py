@@ -21,14 +21,15 @@ class MorizonScraper(BaseScraper):
         self.base_url = "https://www.morizon.pl"
         self.MAX_PAGES = 5  # Maksymalna liczba stron do przeszukania
 
-    def fetch_listings_page(self, search_criteria):
+    def fetch_listings_page(self, search_criteria, page=1):
         """
         Fetches the HTML content of the main listings page from Morizon.pl.
         :param search_criteria: dict, search parameters (e.g., location, property_type).
+        :param page: int, page number to fetch (default: 1)
         :return: HTML content (str) or None.
         """
         # Using the provided example URL
-        example_url = "https://www.morizon.pl/mieszkania/do-300000/gliwice/?ps%5Bliving_area_from%5D=25&ps%5Blocation%5D%5Bmap%5D=1&ps%5Blocation%5D%5Bmap_bounds%5D=50.3752324,18.7546442:50.2272469,18.5445885&ps%5Bnumber_of_rooms_from%5D=2&ps%5Bnumber_of_rooms_to%5D=3"
+        example_url = f"https://www.morizon.pl/mieszkania/do-300000/gliwice/?page={page}&ps%5Bliving_area_from%5D=25&ps%5Blocation%5D%5Bmap%5D=1&ps%5Blocation%5D%5Bmap_bounds%5D=50.3752324,18.7546442:50.2272469,18.5445885&ps%5Bnumber_of_rooms_from%5D=2&ps%5Bnumber_of_rooms_to%5D=3"
         
         print(f"[{self.site_name}] Fetching listings page using URL: {example_url} (Criteria: {search_criteria})")
         

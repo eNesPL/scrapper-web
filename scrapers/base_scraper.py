@@ -27,9 +27,11 @@ class BaseScraper(ABC):
 
 
     @abstractmethod
-    def fetch_listings_page(self, search_criteria):
+    def fetch_listings_page(self, search_criteria, page=1):
         """
         Fetches the HTML content of the main listings page.
+        :param search_criteria: dict, search parameters
+        :param page: int, page number to fetch (default: 1)
         :return: HTML content (str) or None.
         """
         pass
@@ -64,6 +66,7 @@ class BaseScraper(ABC):
     def scrape(self, search_criteria):
         """
         Orchestrates the scraping process with pagination support.
+        :param search_criteria: dict, search parameters
         """
         if not self.db_manager or not self.notification_manager:
             print(f"[{self.site_name}] Error: DatabaseManager or NotificationManager not provided. Cannot proceed with full scrape.")
