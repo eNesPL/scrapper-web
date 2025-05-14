@@ -22,11 +22,12 @@ class AdresowoScraper(BaseScraper):
         # Using the hardcoded URL as requested for fetching listings
         self.hardcoded_listings_url = "https://adresowo.pl/f/mieszkania/gliwice/a25_ff0f1p2p3_p-30"
 
-    def fetch_listings_page(self, search_criteria):
+    def fetch_listings_page(self, search_criteria, page=1):
         """
         Fetches the HTML content of the main listings page from Adresowo.pl
         using a hardcoded URL.
         :param search_criteria: dict, search parameters (ignored for this scraper).
+        :param page: int, page number to fetch (default: 1)
         :return: HTML content (str) or None.
         """
         print(f"[{self.site_name}] Fetching listings page: {self.hardcoded_listings_url}")
