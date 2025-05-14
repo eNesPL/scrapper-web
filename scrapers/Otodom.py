@@ -1,7 +1,6 @@
-# In a real scraper, you would import libraries like requests and BeautifulSoup:
-# import requests
-# from bs4 import BeautifulSoup
-
+import requests
+from fake_useragent import UserAgent
+from bs4 import BeautifulSoup
 from .base_scraper import BaseScraper
 # import datetime # If you need to use datetime objects
 
@@ -24,20 +23,28 @@ class OtodomScraper(BaseScraper):
         :param page: int, page number to fetch (default: 1)
         :return: HTML content (str) or None.
         """
-        print(f"[{self.site_name}] Fetching listings page with criteria: {search_criteria}")
-        # TODO: Implement actual web request to Otodom.pl
-        # Example:
-        # location = search_criteria.get('location', 'warszawa')
-        # prop_type = search_criteria.get('property_type', 'mieszkanie')
-        # url = f"{self.base_url}/oferty/sprzedaz/{prop_type}/{location}"
-        # try:
-        #     response = requests.get(url, timeout=10)
-        #     response.raise_for_status()
-        #     return response.text
-        # except requests.RequestException as e:
-        #     print(f"[{self.site_name}] Error fetching listings page: {e}")
-        #     return None
-        pass
+        import requests
+        from fake_useragent import UserAgent
+        
+        print(f"[{self.site_name}] Fetching listings page {page} with criteria: {search_criteria}")
+        
+        location = search_criteria.get('location', 'warszawa')
+        prop_type = search_criteria.get('property_type', 'mieszkanie')
+        min_beds = search_criteria.get('min_beds', 1)
+        
+        url = f"https://www.otodom.pl/pl/oferty/sprzedaz/{prop_type}/{location}?page={page}"
+        
+        try:
+            headers = {
+                'User-Agent': UserAgent().random,
+                'Accept-Language': 'pl-PL,pl;q=0.9'
+            }
+            response = requests.get(url, headers=headers, timeout=10)
+            response.raise_for_status()
+            return response.text
+        except requests.RequestException as e:
+            print(f"[{self.site_name}] Error fetching listings page {page}: {e}")
+            return None
 
     def parse_listings(self, html_content):
         """
