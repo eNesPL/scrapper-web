@@ -1,8 +1,10 @@
 from flask import Flask, render_template, jsonify
 from database_manager import DatabaseManager
+from notification_manager import NotificationManager
 import config
 
 app = Flask(__name__)
+notification_manager = NotificationManager(config.DISCORD_WEBHOOK_URL)
 
 import json
 
@@ -79,7 +81,9 @@ def get_listings_from_db():
 def index():
     """Display a HTML page with all listings"""
     listings = get_listings_from_db()
-    return render_template('listings.html', listings=listings)
+    return render_template('listings.html', 
+                         listings=listings,
+                         notification_manager=notification_manager)
 
 @app.route('/api/listings')
 def api_listings():
