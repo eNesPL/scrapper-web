@@ -183,29 +183,22 @@ class OtodomScraper(BaseScraper):
             except (ValueError, TypeError):
                 details['price'] = None
 
-        # Extract description from multiple possible locations
+        # Extract description with better accuracy
         description = ''
         
-        # Try main description section first
-        desc_div = soup.find('div', {'data-cy': 'adPageAdDescription'})
-        if desc_div:
-            description = desc_div.get_text(strip=True)
+        # Try main description section
+        desc_section = soup.find('div', {'data-testid': 'description-text'})
+        if desc_section:
+            description = desc_section.get_text('\n').strip()
+        elif soup.find('div', {'data-cy': 'adPageAdDescription'}):
+            description = soup.find('div', {'data-cy': 'adPageAdDescription'}).get_text('\n').strip()
+        else:
+            # Fallback to content div
+            content_div = soup.select_one('div[class*="description"]')
+            if content_div:
+                description = content_div.get_text('\n').strip()
         
-        # Fallback to alternative locations
-        if not description:
-            desc_div = soup.select_one('div[class*="css-1shxysy"], div[class*="css-1wyfyx5"]')
-            if desc_div:
-                description = '\n'.join(p.get_text().strip() 
-                                      for p in desc_div.find_all(['p', 'div']) 
-                                      if p.get_text().strip())
-        
-        # Final fallback to content section
-        if not description:
-            content_section = soup.select_one('div.css-1hzn8e1, div.css-6wauch')
-            if content_section:
-                description = content_section.get_text(strip=True)
-        
-        details['description'] = description.strip() if description else 'Brak opisu'
+        details['description'] = description or 'Brak opisu'
 
         # Extract parameters from multiple possible sections
         params = {}
@@ -274,9 +267,12 @@ class OtodomScraper(BaseScraper):
         )
         details['floor'] = params.get('Piętro', 'N/A').split('/')[0].strip()  # Handle format like "parter/2"
 
-        # Extract image count
-        images = soup.find_all('img', {'class': 'css-1bmvjcs'})
-        details['image_count'] = len(images)
+        # Extract images and count (new structure)
+        image_tags = soup.find_all('img', {'data-cy': 'listing-item-image-source'})
+        if not image_tags:
+            # Try alternative location for images
+            image_tags = soup.select('img[class*="css-1bmvjcs"], img[class*="carousel-image"]')
+        details['image_count'] = len(image_tags)
 
         # Add site name
         details['site_name'] = self.site_name
