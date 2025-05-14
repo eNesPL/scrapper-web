@@ -441,6 +441,7 @@ class LentoScraper(BaseScraper):
                     print(f"[{self.site_name}] Image count from counter: {details['image_count']}")
 
         # Get first image URL from multiple possible sources
+        img_src = None
         # Source 1: Check for images with class "width-100"
         img_tag = soup.find('img', class_='width-100')
         if img_tag:
