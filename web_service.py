@@ -24,9 +24,6 @@ def get_listings_from_db():
     # Pobierz wszystkie dane i posortuj w Pythonie dla bardziej złożonych przypadków
     cursor.execute("SELECT * FROM listings")
     rows = cursor.fetchall()
-    conn.close()
-    
-    rows = cursor.fetchall()
     listings = []
     for row in rows:
         listing = dict(row)
@@ -71,6 +68,7 @@ def get_listings_from_db():
     else:  # date_desc
         listings.sort(key=lambda x: x.get('first_seen', ''), reverse=True)
 
+    conn.close()
     return listings
 
 @app.route('/')
