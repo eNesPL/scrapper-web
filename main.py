@@ -68,6 +68,13 @@ def main():
 
     available_scrapers_dict = discover_scrapers()
 
+    # Remove specific scrapers we want to disable
+    scrapers_to_disable = ['sprzedajemyScraper', 'SzybkoScraper']
+    for scraper_name in scrapers_to_disable:
+        if scraper_name in available_scrapers_dict:
+            del available_scrapers_dict[scraper_name]
+            print(f"Disabled scraper: {scraper_name}")
+
     if not available_scrapers_dict:
         print("No scrapers found. Make sure scraper modules are in the 'scrapers' directory,")
         print("inherit from BaseScraper, and that 'scrapers/__init__.py' exists.")
