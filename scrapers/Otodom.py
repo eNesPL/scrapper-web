@@ -293,7 +293,7 @@ class OtodomScraper(BaseScraper):
         
         details['image_count'] = len(image_tags)
         details['images'] = [img['src'] for img in image_tags if img.get('src')]
-        details['main_image'] = main_image
+        details['main_image'] = main_image or (details['images'][0] if details['images'] else None)
 
         # Add site name
         details['site_name'] = self.site_name
