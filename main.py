@@ -81,6 +81,7 @@ def main():
         return
 
     print("\nAvailable scrapers:")
+    print("0. Run ALL scrapers")
     scraper_display_list = []
     # Sort scrapers by class name for consistent ordering
     sorted_scraper_items = sorted(available_scrapers_dict.items())
@@ -106,11 +107,14 @@ def main():
         try:
             choice_str = input(f"\nEnter the number of the scraper to run (1-{len(scraper_display_list)}): ")
             choice = int(choice_str)
-            if 1 <= choice <= len(scraper_display_list):
+            if choice == 0:
+                selected_scraper_info = "ALL"
+                break
+            elif 1 <= choice <= len(scraper_display_list):
                 selected_scraper_info = scraper_display_list[choice - 1]
                 break
             else:
-                print(f"Invalid choice. Please enter a number between 1 and {len(scraper_display_list)}.")
+                print(f"Invalid choice. Please enter a number between 0 and {len(scraper_display_list)}.")
         except ValueError:
             print("Invalid input. Please enter a number.")
         except KeyboardInterrupt:
@@ -118,27 +122,42 @@ def main():
             return
     
     if selected_scraper_info:
-        SelectedScraperClass = selected_scraper_info['class']
-        print(f"\nAttempting to run scraper: {selected_scraper_info['name']}")
-        
-        try:
-            # Instantiate with actual managers for the run
-            scraper_instance = SelectedScraperClass(db_manager=db_manager, notification_manager=notification_manager)
-        except Exception as e:
-            print(f"Could not instantiate {selected_scraper_info['class_name']} with managers: {e}")
-            return
+        if selected_scraper_info == "ALL":
+            print("\nRunning ALL scrapers...")
+            search_criteria = {
+                'location': 'Sample City',
+                'property_type': 'apartment',
+                'min_beds': 2
+            }
+            
+            for scraper_info in scraper_display_list:
+                try:
+                    scraper_instance = scraper_info['class'](db_manager=db_manager, notification_manager=notification_manager)
+                    print(f"\nRunning scraper: {scraper_instance.site_name} with criteria: {search_criteria}")
+                    scraper_instance.scrape(search_criteria)
+                    print(f"Completed scraping for {scraper_instance.site_name}")
+                except Exception as e:
+                    print(f"Error running {scraper_info['name']}: {e}")
+                    continue
+        else:
+            SelectedScraperClass = selected_scraper_info['class']
+            print(f"\nAttempting to run scraper: {selected_scraper_info['name']}")
+            
+            try:
+                scraper_instance = SelectedScraperClass(db_manager=db_manager, notification_manager=notification_manager)
+            except Exception as e:
+                print(f"Could not instantiate {selected_scraper_info['class_name']} with managers: {e}")
+                return
 
-        search_criteria = {
-            'location': 'Sample City', # You might want to make this configurable too
-            'property_type': 'apartment',
-            'min_beds': 2
-        }
+            search_criteria = {
+                'location': 'Sample City',
+                'property_type': 'apartment',
+                'min_beds': 2
+            }
 
-        print(f"Running scraper: {scraper_instance.site_name} with criteria: {search_criteria}")
-        # The scrape method now handles DB and notifications internally
-        scraper_instance.scrape(search_criteria) 
-
-        print(f"\nScraping process completed for {scraper_instance.site_name}.")
+            print(f"Running scraper: {scraper_instance.site_name} with criteria: {search_criteria}")
+            scraper_instance.scrape(search_criteria)
+            print(f"\nScraping process completed for {scraper_instance.site_name}.")
         # Optionally, display data from DB or summary stats here
         
     else: # Should not be reached if loop for selection works correctly
