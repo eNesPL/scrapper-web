@@ -29,8 +29,9 @@ class NotificationManager:
         headers = {'Content-Type': 'application/json'}
         
         try:
-            response = requests.post(self.webhook_url, data=json.dumps(payload), headers=headers, timeout=10)
-            response.raise_for_status() # Raise an exception for HTTP errors (4xx or 5xx)
+            print("wylaczone powiadomienia")
+            #response = requests.post(self.webhook_url, data=json.dumps(payload), headers=headers, timeout=10)
+            #response.raise_for_status() # Raise an exception for HTTP errors (4xx or 5xx)
             # print(f"Discord notification sent successfully. Message: {message_content or 'Embed used'}")
         except requests.RequestException as e:
             print(f"Error sending Discord notification: {e}")
