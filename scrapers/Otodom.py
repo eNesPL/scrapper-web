@@ -50,8 +50,9 @@ class OtodomScraper(BaseScraper):
         """
         Parses the listings page HTML to extract individual listing URLs or summary data.
         :param html_content: str, HTML content of the listings page.
-        :return: List of dictionaries, each with at least a 'url'.
-                 (e.g., [{'url': '...', 'price': '...', 'title': '...'}, ...])
+        :return: Tuple of (listings, has_next_page) where:
+                 - listings: List of dictionaries, each with at least a 'url'
+                 - has_next_page: bool, whether there are more pages to scrape
         """
         from bs4 import BeautifulSoup
         print(f"[{self.site_name}] Parsing listings page content.")
@@ -97,7 +98,10 @@ class OtodomScraper(BaseScraper):
             }
             listings.append(listing_data)
             
-        return listings
+        # Simple check for next page - we'll assume there are more pages if we found any listings
+        # and we're not on the last page (based on MAX_PAGES which is handled in base_scraper)
+        has_next_page = len(listings) > 0
+        return listings, has_next_page
 
     def fetch_listing_details_page(self, listing_url):
         """
