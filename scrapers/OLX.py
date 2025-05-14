@@ -258,8 +258,10 @@ class OLXScraper(BaseScraper):
             first_img = soup.find('img', {'data-testid': 'swiper-image'})
             details['first_image_url'] = first_img.get('src') if first_img else None
             
-            # Extract additional parameters
+            # Extract additional parameters from both locations
             params = {}
+            
+            # Old location (data-cy="ad-parameters")
             params_section = soup.find('div', {'data-cy': 'ad-parameters'})
             if params_section:
                 for param in params_section.find_all('li'):
@@ -267,6 +269,33 @@ class OLXScraper(BaseScraper):
                     value = param.get_text().replace(key, '').strip() if key else None
                     if key and value:
                         params[key] = value
+            
+            # New location (data-testid="ad-parameters-container")
+            params_container = soup.find('div', {'data-testid': 'ad-parameters-container'})
+            if params_container:
+                for param in params_container.find_all('p', class_='css-1los5bp'):
+                    parts = param.get_text().split(':', 1)
+                    if len(parts) == 2:
+                        key = parts[0].strip()
+                        value = parts[1].strip()
+                        params[key] = value
+                    else:
+                        # Handle simple key-value pairs without colon
+                        params[param.get_text().strip()] = True
+            
+            # Extract area from parameters if available
+            if 'Powierzchnia' in params:
+                try:
+                    details['area_m2'] = float(params['Powierzchnia'].replace('m²', '').strip())
+                except ValueError:
+                    pass
+            
+            # Add all parameters to description
+            description = details.get('description', '')
+            if params:
+                params_text = '\n'.join(f"{k}: {v}" for k, v in params.items())
+                details['description'] = f"{description}\n\nDodatkowe parametry:\n{params_text}".strip()
+            
             details.update(params)
             
         except Exception as e:
