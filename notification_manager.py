@@ -57,21 +57,34 @@ class NotificationManager:
         return embed
 
     def format_updated_listing_embed(self, listing_data, changes):
-        title = f":arrows_counterclockwise: Updated Listing: {listing_data.get('title', 'N/A')}"
-        if not changes: # Should not happen if called correctly
+        # Filtruj tylko rzeczywiste zmiany (gdzie stara i nowa wartość są różne)
+        real_changes = [(f, ov, nv) for f, ov, nv in changes if str(ov) != str(nv)]
+        if not real_changes:
             return None
 
+        title = f":arrows_counterclockwise: Updated Listing: {listing_data.get('title', 'N/A')}"
         fields = [
             {"name": "Site", "value": listing_data.get('site_name', 'N/A'), "inline": True},
             {"name": "URL", "value": f"[View Listing]({listing_data.get('url')})", "inline": False}
         ]
         
         change_descriptions = []
-        for field, old_value, new_value in changes:
-            change_desc = f"**{field.replace('_', ' ').title()}**: `{old_value}` -> `{new_value}`"
+        for field, old_value, new_value in real_changes:
+            # Formatowanie wartości liczbowych bez niepotrzebnych miejsc po przecinku
+            if isinstance(old_value, float) and old_value.is_integer():
+                old_value = int(old_value)
+            if isinstance(new_value, float) and new_value.is_integer():
+                new_value = int(new_value)
+                
+            change_desc = f"**{field.replace('_', ' ').title()}**: `{old_value}` → `{new_value}`"
             change_descriptions.append(change_desc)
-            # Add individual fields for major changes if desired
-            # fields.append({"name": f"{field.replace('_', ' ').title()} Changed", "value": f"`{old_value}` -> `{new_value}`", "inline": True})
+            # Dodaj szczegółowe pola dla ważnych zmian
+            if field == 'price':
+                fields.append({
+                    "name": "Price Change",
+                    "value": f"`{old_value} zł` → `{new_value} zł`",
+                    "inline": True
+                })
 
 
         embed = {
