@@ -161,25 +161,58 @@ class sprzedajemyScraper(BaseScraper):
         :return: Dictionary with detailed property info.
                  Should include 'price', 'description', 'image_count', 'title'.
         """
+        from bs4 import BeautifulSoup
         print(f"[{self.site_name}] Parsing listing details page content.")
         if not html_content:
             return {}
-        # TODO: Implement HTML parsing logic for sprzedajemy.pl listing detail page
-        # Example using BeautifulSoup:
-        # from bs4 import BeautifulSoup
-        # soup = BeautifulSoup(html_content, 'html.parser')
-        # details = {}
-        # details['title'] = soup.find('h1', class_='css-1juy7z6 e1j853lh0').text.strip() # Example, actual class will differ
-        # details['price'] = soup.find('strong', attrs={'data-cy': 'price_value'}).text.strip() # Example
-        # description_tag = soup.find('div', attrs={'data-cy': 'adPageAdDescription'})
-        # details['description'] = description_tag.text.strip() if description_tag else 'N/A' # Example
-        # image_tags = soup.find_all('img', class_='image-gallery-image') # Example
-        # details['image_count'] = len(image_tags)
-        #
-        # # Ensure all required fields are present
-        # details.setdefault('title', 'N/A')
-        # details.setdefault('price', 'N/A')
-        # details.setdefault('description', 'N/A')
-        # details.setdefault('image_count', 0)
-        # return details
-        return {}
+
+        soup = BeautifulSoup(html_content, 'html.parser')
+        details = {}
+
+        # Extract title
+        title_tag = soup.find('h1')
+        details['title'] = title_tag.get_text(strip=True) if title_tag else 'N/A'
+
+        # Extract price
+        price_tag = soup.find('span', class_='price')
+        if price_tag:
+            price = price_tag.get_text(strip=True).replace(' ', '').replace('zł', '')
+            details['price'] = price
+            details['price_per_m2'] = soup.find(text=lambda t: 'zł/m²' in t).strip() if soup.find(text=lambda t: 'zł/m²' in t) else None
+
+        # Extract description
+        description = []
+        for p in soup.find_all('p'):
+            if p.get_text(strip=True):
+                description.append(p.get_text(strip=True))
+        details['description'] = '\n'.join(description) if description else 'N/A'
+
+        # Extract parameters
+        params = {}
+        for attr in soup.find_all('div', class_='attribute'):
+            key = attr.find('span', class_='key')
+            value = attr.find('span', class_='value')
+            if key and value:
+                params[key.get_text(strip=True)] = value.get_text(strip=True)
+        details['params'] = params
+
+        # Extract images
+        images = []
+        for img in soup.find_all('img', loading='lazy'):
+            if img.get('src'):
+                images.append(img['src'])
+        details['images'] = images
+        details['image_count'] = len(images)
+
+        # Extract additional info
+        details['location'] = soup.find('a', class_='location').get_text(strip=True) if soup.find('a', class_='location') else None
+        details['date'] = soup.find('time').get('datetime') if soup.find('time') else None
+        details['seller_type'] = soup.find('span', class_='seller-type').get_text(strip=True) if soup.find('span', class_='seller-type') else None
+
+        # Ensure all required fields are present
+        details.setdefault('title', 'N/A')
+        details.setdefault('price', 'N/A')
+        details.setdefault('description', 'N/A')
+        details.setdefault('image_count', 0)
+
+        return details
