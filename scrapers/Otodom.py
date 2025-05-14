@@ -182,9 +182,14 @@ class OtodomScraper(BaseScraper):
             except (ValueError, TypeError):
                 details['price'] = None
 
-        # Extract description
+        # Extract description with better formatting
         desc_tag = soup.find('div', {'data-cy': 'adPageAdDescription'})
-        details['description'] = desc_tag.get_text(strip=True) if desc_tag else 'N/A'
+        if desc_tag:
+            # Clean up description text - remove excessive whitespace but preserve paragraphs
+            description = '\n'.join(line.strip() for line in desc_tag.get_text().split('\n') if line.strip())
+            details['description'] = description
+        else:
+            details['description'] = 'Brak opisu'
 
         # Extract parameters from multiple possible sections
         params = {}
