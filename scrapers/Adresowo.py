@@ -408,28 +408,38 @@ class AdresowoScraper(BaseScraper):
         
         details['image_count'] = image_count
         
-        # Extract first image URL from details page if not already set
-        if 'first_image_url' not in details or not details['first_image_url']:
-            img_selectors = [
-                '#mainImage[src], #mainImage[data-src]',
-                'img.gallery-slider__image[src], img.gallery-slider__image[data-src]',
-                'img.photo-gallery__img[src], img.photo-gallery__img[data-src]',
-                'img.offer-gallery__img[src], img.offer-gallery__img[data-src]'
-            ]
-            for selector in img_selectors:
-                img_tag = soup.select_one(selector)
-                if img_tag:
-                    details['first_image_url'] = img_tag.get('data-src') or img_tag.get('src')
-                    if details['first_image_url']:
-                        # Make relative URLs absolute
-                        if details['first_image_url'].startswith('//'):
-                            details['first_image_url'] = 'https:' + details['first_image_url']
-                        elif not details['first_image_url'].startswith(('http://', 'https://')):
-                            if details['first_image_url'].startswith('/'):
-                                details['first_image_url'] = self.base_url + details['first_image_url']
-                            else:
-                                details['first_image_url'] = self.base_url + '/' + details['first_image_url']
-                        break
+        # Extract images from offer-gallery
+        details['images'] = []
+        gallery = soup.find('div', class_='offer-gallery')
+        if gallery:
+            # Get main image
+            main_img = gallery.find('img', class_='offer-gallery__image')
+            if main_img:
+                img_url = main_img.get('src')
+                if img_url and not any(x in img_url.lower() for x in ['placeholder', 'default']):
+                    if img_url.startswith('//'):
+                        img_url = 'https:' + img_url
+                    elif not img_url.startswith(('http://', 'https://')):
+                        img_url = self.base_url + img_url if img_url.startswith('/') else self.base_url + '/' + img_url
+                    details['images'].append(img_url)
+            
+            # Get small images
+            small_images = gallery.select('.offer-gallery__small-images img')
+            for img in small_images:
+                img_url = img.get('src')
+                if img_url and not any(x in img_url.lower() for x in ['placeholder', 'default']):
+                    if img_url.startswith('//'):
+                        img_url = 'https:' + img_url
+                    elif not img_url.startswith(('http://', 'https://')):
+                        img_url = self.base_url + img_url if img_url.startswith('/') else self.base_url + '/' + img_url
+                    details['images'].append(img_url)
+            
+            # Set first image URL if not already set
+            if 'first_image_url' not in details and details['images']:
+                details['first_image_url'] = details['images'][0]
+            
+            # Update image count
+            details['image_count'] = len(details['images'])
 
         print(f"[{self.site_name}] Parsed details: Title='{details.get('title', 'N/A')[:30]}...', "
               f"Price='{details.get('price', 'N/A')}', "
