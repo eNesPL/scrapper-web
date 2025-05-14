@@ -262,20 +262,20 @@ class MorizonScraper(BaseScraper):
                 description_parts.append(main_desc_text)
                 print(f"[{self.site_name}] Main description text found. Length: {len(main_desc_text)}")
 
-        # Area extraction via XPath first
-        if lxml_html and html_content:
-            try:
-                # Ensure tree is parsed, reuse if already parsed for title/price
-                if 'tree' not in locals() or tree is None:
-                    tree = lxml_html.fromstring(html_content)
-                
-                # User provided XPath for area
-                area_elements = tree.xpath('/html/body/div[1]/div[2]/main/div[1]/div[4]/section/div/div[2]/span[2]/span')
-                if area_elements:
-                    details['area_m2'] = area_elements[0].text_content().strip()
-                    print(f"[{self.site_name}] Area (XPath): {details['area_m2']}")
-            except Exception as e:
-                print(f"[{self.site_name}] Error extracting area with XPath: {e}. Falling back to BeautifulSoup if necessary.")
+        # Area extraction - first try structured data
+        area_tag = soup.find('span', string=lambda t: t and 'Pow. całkowita' in t)
+        if area_tag:
+            area_value = area_tag.find_next_sibling('span')
+            if area_value:
+                details['area_m2'] = area_value.get_text(strip=True)
+                print(f"[{self.site_name}] Area (structured): {details['area_m2']}")
+        
+        # Fallback to regex search if still not found
+        if details['area_m2'] == 'N/A':
+            area_match = re.search(r'Pow\.\s*całkowita:\s*([\d,\.]+)\s*m²', html_content)
+            if area_match:
+                details['area_m2'] = f"{area_match.group(1)} m²"
+                print(f"[{self.site_name}] Area (regex fallback): {details['area_m2']}")
 
         # Structured Details from div.FONERK (or similar) to be added to description
         # This replaces the old sections_to_parse logic
@@ -342,9 +342,14 @@ class MorizonScraper(BaseScraper):
                                     print(f"[{self.site_name}] Area (BS fallback - old propertyDetails 'Pow. całkowita'): {details['area_m2']}")
                         if details['area_m2'] != 'N/A': break 
 
-        if description_parts:
-            full_description = "\n\n".join(filter(None, description_parts)).strip()
-            details['description'] = full_description[:1000] + '...' if len(full_description) > 1000 else full_description
+        # Description fallback if still empty
+        if not description_parts or details['description'] == 'N/A':
+            desc_div = soup.find('div', class_='description__content')
+            if desc_div:
+                details['description'] = desc_div.get_text(separator='\n', strip=True)
+        
+        if details['description'] and details['description'] != 'N/A':
+            details['description'] = details['description'][:1000] + '...' if len(details['description']) > 1000 else details['description']
         print(f"[{self.site_name}] Final description length: {len(details['description'])}")
 
 
