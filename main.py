@@ -98,17 +98,8 @@ def main():
         scraper_display_list.append({'id': i + 1, 'name': site_display_name, 'class_name': class_name, 'class': scraper_class})
         print(f"{i + 1}. {site_display_name} (Klasa: {class_name})")
     
-    # Automatycznie wybierz scraper Morizon.pl
-    selected_scraper_info = None
-    for scraper in scraper_display_list:
-        if scraper['name'] == 'Morizon.pl':
-            selected_scraper_info = scraper
-            break
-    
-    if not selected_scraper_info and scraper_display_list:
-        selected_scraper_info = scraper_display_list[0]  # Fallback na pierwszy scraper
-    
-    if selected_scraper_info:
+    # Uruchom wszystkie scrapers
+    if scraper_display_list:
         if selected_scraper_info == "ALL":
             print("\nRunning ALL scrapers...")
             search_criteria = {
