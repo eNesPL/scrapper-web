@@ -20,18 +20,19 @@ class GratkaScraper(BaseScraper):
         self.base_url = "https://gratka.pl"
         self.MAX_PAGES = 5  # Maksymalna liczba stron do przeszukania
 
-    def fetch_listings_page(self, search_criteria):
+    def fetch_listings_page(self, search_criteria, page=1):
         """
         Fetches the HTML content of the main listings page from Gratka.pl.
         :param search_criteria: dict, search parameters (e.g., location, property_type).
+        :param page: int, page number to fetch (default: 1)
         :return: HTML content (str) or None.
         """
         # Example URL provided by user, in a real scenario, build this from search_criteria
         # For now, we'll use the provided static URL for Gliwice.
         # We can enhance this later to use search_criteria if needed.
-        example_url = "https://gratka.pl/nieruchomosci/mieszkania/3-pokojowe/gliwice?cena-calkowita:max=300000&location%5Bmap%5D=1&location%5Bmap_bounds%5D=50.3752324,18.7546442:50.2272469,18.5445885&ogloszenie-zawiera%5B0%5D=zdjecie&ogloszenie-zawiera%5B1%5D=cena&powierzchnia-w-m2:min=25&sort=relevance"
+        example_url = f"https://gratka.pl/nieruchomosci/mieszkania/3-pokojowe/gliwice?cena-calkowita:max=300000&location%5Bmap%5D=1&location%5Bmap_bounds%5D=50.3752324,18.7546442:50.2272469,18.5445885&ogloszenie-zawiera%5B0%5D=zdjecie&ogloszenie-zawiera%5B1%5D=cena&powierzchnia-w-m2:min=25&sort=relevance&page={page}"
         
-        print(f"[{self.site_name}] Fetching listings page using URL: {example_url} (Criteria: {search_criteria})")
+        print(f"[{self.site_name}] Fetching listings page {page} using URL: {example_url} (Criteria: {search_criteria})")
         
         try:
             response = requests.get(example_url, timeout=10)
