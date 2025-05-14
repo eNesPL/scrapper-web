@@ -167,7 +167,7 @@ class GratkaScraper(BaseScraper):
                 print(f"[{self.site_name}] Error extracting price with XPath: {e}")
 
             try:
-                area_el = lxml_tree.xpath('//span[contains(text(),"m²")]')
+                area_el = lxml_tree.xpath('//span[contains(text(),"m²") and not(contains(text(),"zł"))]')
                 if area_el:
                     details['area_m2'] = area_el[0].text_content().strip()
                     print(f"[{self.site_name}] Area (XPath): {details['area_m2']}")
@@ -226,11 +226,11 @@ class GratkaScraper(BaseScraper):
         if details['area_m2'] == 'N/A':
             if parameters_section:
                 text = parameters_section.get_text(separator=" ", strip=True)
-                m = re.search(r'(\d+[\.,]?\d*)\s*(m²|m2|m\s*²)', text, re.IGNORECASE)
+                m = re.search(r'(\d+[\.,]?\d*)\s*(m²|m2|m\s*²)(?!.*zł)', text, re.IGNORECASE)
                 if m:
                     details['area_m2'] = f"{m.group(1).replace(',', '.')} {m.group(2)}"
             if details['area_m2'] == 'N/A':
-                m = re.search(r'(\d+[\.,]?\d*)\s*(m²|m2|m\s*²)', soup.get_text(), re.IGNORECASE)
+                m = re.search(r'(\d+[\.,]?\d*)\s*(m²|m2|m\s*²)(?!.*zł)', soup.get_text(), re.IGNORECASE)
                 if m:
                     details['area_m2'] = f"{m.group(1).replace(',', '.')} {m.group(2)}"
         print(f"[{self.site_name}] Area: {details['area_m2']}")
