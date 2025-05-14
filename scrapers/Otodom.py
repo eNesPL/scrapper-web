@@ -202,7 +202,21 @@ class OtodomScraper(BaseScraper):
             # Remove excessive empty lines
             description = re.sub(r'\n{3,}', '\n\n', description).strip()
         
-        details['description'] = description or 'Brak opisu'
+        # Add property details from the info section
+        details_section = soup.find('div', {'data-sentry-component': 'AdDetailsBase'})
+        if details_section:
+            details_text = []
+            for item in details_section.find_all('div', {'class': 'css-1xw0jqp'}):
+                items = item.find_all('p', {'class': 'css-1airkmu'})
+                if len(items) >= 2:
+                    name = items[0].get_text(strip=True).replace(':', '')
+                    value = items[1].get_text(strip=True)
+                    details_text.append(f"{name}: {value}")
+            
+            if details_text:
+                description = f"{description}\n\nParametry:\n" + '\n'.join(details_text) if description else 'Parametry:\n' + '\n'.join(details_text)
+        
+        details['description'] = description.strip() if description else 'Brak opisu'
 
         # Extract parameters from multiple possible sections
         params = {}
