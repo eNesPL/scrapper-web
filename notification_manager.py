@@ -5,6 +5,7 @@ import datetime # Added import for datetime
 class NotificationManager:
     def __init__(self, webhook_url):
         self.webhook_url = webhook_url
+        self.ignore_identical_values = False
         if not self.webhook_url:
             print("Discord webhook URL not provided. Notifications will be disabled.")
         elif not self.webhook_url.startswith("https://discord.com/api/webhooks/"):
@@ -73,7 +74,13 @@ class NotificationManager:
 
     def format_updated_listing_embed(self, listing_data, changes):
         # Filtruj tylko rzeczywiste zmiany (gdzie stara i nowa wartość są różne)
-        real_changes = [(f, ov, nv) for f, ov, nv in changes if str(ov) != str(nv)]
+        real_changes = []
+        for f, ov, nv in changes:
+            if f == 'price' and self.ignore_identical_values and str(ov) == str(nv):
+                continue
+            if str(ov) != str(nv):
+                real_changes.append((f, ov, nv))
+        
         if not real_changes:
             return None
 
