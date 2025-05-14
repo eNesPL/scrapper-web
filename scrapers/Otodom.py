@@ -282,19 +282,37 @@ class OtodomScraper(BaseScraper):
             if img_tag and img_tag.get('src'):
                 main_image = img_tag['src'].split(';')[0]  # Remove size parameters
         
-        # Try multiple image locations
-        gallery = soup.find('div', {'data-testid': 'gallery'})
-        if not gallery:
-            gallery = soup.find('div', {'class': 'css-1g43fk1'})  # Alternative gallery class
+        # Try new gallery structure
+        gallery_wrapper = soup.find('div', {'data-sentry-component': 'Gallery'})
+        if gallery_wrapper:
+            # Find all image sources in the gallery
+            sources = gallery_wrapper.find_all('source')
+            for source in sources:
+                if source.get('srcset'):
+                    image_url = source['srcset'].split('?')[0]
+                    if image_url not in image_tags:
+                        image_tags.append({'src': image_url})
             
-        if gallery:
-            # Try both src and data-src attributes
-            image_tags = gallery.find_all('img', {'src': True})
-            if not image_tags:
-                image_tags = gallery.find_all('img', {'data-src': True})
-                image_tags = [{'src': img['data-src']} for img in image_tags]
+            # Also check img tags in the gallery
+            gallery_images = gallery_wrapper.find_all('img', {'src': True})
+            for img in gallery_images:
+                if img['src'] not in [t['src'] for t in image_tags]:
+                    image_tags.append({'src': img['src']})
         
-        # Fallback to other image locations
+        # Fallback to old gallery structure
+        if not image_tags:
+            gallery = soup.find('div', {'data-testid': 'gallery'})
+            if not gallery:
+                gallery = soup.find('div', {'class': 'css-1g43fk1'})  # Alternative gallery class
+                
+            if gallery:
+                # Try both src and data-src attributes
+                image_tags = gallery.find_all('img', {'src': True})
+                if not image_tags:
+                    image_tags = gallery.find_all('img', {'data-src': True})
+                    image_tags = [{'src': img['data-src']} for img in image_tags]
+        
+        # Final fallback to other image locations
         if not image_tags:
             image_tags = soup.find_all('img', {
                 'data-cy': lambda x: x and 'image' in x.lower()
