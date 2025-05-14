@@ -312,34 +312,30 @@ class AdresowoScraper(BaseScraper):
         area_text = 'N/A'
         print(f"[{self.site_name}] Starting area parsing...")
         
-        # Szukaj kontenera z danymi technicznymi
-        summary_container = soup.find('div', class_='offer-summary__item1')
-        area_text = 'N/A'
-        if summary_container:
-            print(f"[{self.site_name}] Found summary container")
-            
-            # Przeszukaj wszystkie wiersze w kontenerze
-            rows = summary_container.find_all('div', role='row')
+        # Szukaj w różnych sekcjach strony
+        area_selectors = [
+            ('div.offer-summary__item1 div[role="row"]', 'Powierzchnia'),
+            ('div.parameters__item', 'Powierzchnia'),
+            ('div.technical-data__item', 'Powierzchnia'),
+            ('div.offer-details__item', 'Powierzchnia')
+        ]
+        
+        for selector, keyword in area_selectors:
+            rows = soup.select(selector)
             for row in rows:
                 row_text = ' '.join(row.stripped_strings)
-                
-                # Parsowanie powierzchni
-                if 'Powierzchnia' in row_text:
-                    area_span = row.find('span', class_='offer-summary__value')
-                    if area_span:
-                        area_value = area_span.get_text(strip=True)
-                        unit = area_span.next_sibling.strip() if area_span.next_sibling else 'm²'
-                        area_text = f"{area_value} {unit}"
+                if keyword in row_text:
+                    # Try to extract numeric value with unit
+                    area_match = re.search(r'(\d+[\.,]?\d*)\s*(m²|m2|m\s*²)', row_text, re.IGNORECASE)
+                    if area_match:
+                        area_value = area_match.group(1).replace(',', '.')
+                        area_text = f"{area_value} {area_match.group(2)}"
                         print(f"[{self.site_name}] Found area: {area_text}")
                         break
-            else:
-                print(f"[{self.site_name}] No area found in summary rows")
-                area_text = 'N/A'
-        else:
-            print(f"[{self.site_name}] No summary container found")
-            area_text = 'N/A'
-
-        print(f"[{self.site_name}] Preliminary area: {area_text}")
+            if area_text != 'N/A':
+                break
+                
+        print(f"[{self.site_name}] Final area: {area_text}")
 
         # Final Fallback: try to extract from description if not found in dedicated field and still N/A
         if area_text == 'N/A':
@@ -408,38 +404,34 @@ class AdresowoScraper(BaseScraper):
         
         details['image_count'] = image_count
         
-        # Extract images from offer-gallery
+        # Extract images
         details['images'] = []
-        gallery = soup.find('div', class_='offer-gallery')
-        if gallery:
-            # Get main image
-            main_img = gallery.find('img', class_='offer-gallery__image')
-            if main_img:
-                img_url = main_img.get('src')
+        img_selectors = [
+            'div.offer-gallery img.offer-gallery__image',
+            'div.offer-gallery img[data-src]',
+            'div.gallery img[src]',
+            'img.offer-photo',
+            'img[itemprop="image"]'
+        ]
+        
+        for selector in img_selectors:
+            imgs = soup.select(selector)
+            for img in imgs:
+                img_url = img.get('data-src') or img.get('src')
                 if img_url and not any(x in img_url.lower() for x in ['placeholder', 'default']):
                     if img_url.startswith('//'):
                         img_url = 'https:' + img_url
                     elif not img_url.startswith(('http://', 'https://')):
                         img_url = self.base_url + img_url if img_url.startswith('/') else self.base_url + '/' + img_url
-                    details['images'].append(img_url)
+                    if img_url not in details['images']:
+                        details['images'].append(img_url)
             
-            # Get small images
-            small_images = gallery.select('.offer-gallery__small-images img')
-            for img in small_images:
-                img_url = img.get('src')
-                if img_url and not any(x in img_url.lower() for x in ['placeholder', 'default']):
-                    if img_url.startswith('//'):
-                        img_url = 'https:' + img_url
-                    elif not img_url.startswith(('http://', 'https://')):
-                        img_url = self.base_url + img_url if img_url.startswith('/') else self.base_url + '/' + img_url
-                    details['images'].append(img_url)
-            
-            # Set first image URL if not already set
-            if 'first_image_url' not in details and details['images']:
-                details['first_image_url'] = details['images'][0]
-            
-            # Update image count
+        # Set first image URL if any images found
+        if details['images']:
+            details['first_image_url'] = details['images'][0]
             details['image_count'] = len(details['images'])
+        else:
+            details['image_count'] = 0
 
         print(f"[{self.site_name}] Parsed details: Title='{details.get('title', 'N/A')[:30]}...', "
               f"Price='{details.get('price', 'N/A')}', "
