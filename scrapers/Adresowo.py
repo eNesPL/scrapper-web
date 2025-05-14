@@ -369,6 +369,7 @@ class AdresowoScraper(BaseScraper):
             
         # Image Count
         image_count = 0
+        summary_container = soup.find('div', class_='offer-summary__item1')
         if summary_container:
             print(f"[{self.site_name}] Searching for image count in summary container")
             rows = summary_container.find_all('div', role='row')
