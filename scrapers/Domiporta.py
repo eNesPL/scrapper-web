@@ -20,7 +20,8 @@ class DomiportaScraper(BaseScraper):
         super().__init__(site_name="Domiporta.pl",
                          db_manager=db_manager,
                          notification_manager=notification_manager)
-        # self.base_url = "https://www.domiporta.pl" # Example base URL
+        self.base_url = "https://www.domiporta.pl"
+        self.MAX_PAGES = 5  # Maksymalna liczba stron do przeszukania
 
     def fetch_listings_page(self, search_criteria):
         """
