@@ -15,22 +15,29 @@ def get_listings_from_db():
     
     sort = request.args.get('sort', 'date_desc')
     order_by = {
-        'price_asc': 'price ASC',
-        'price_desc': 'price DESC',
+        'price_asc': 'CAST(price AS REAL) ASC',
+        'price_desc': 'CAST(price AS REAL) DESC',
         'date_asc': 'first_seen ASC',
         'date_desc': 'first_seen DESC'
     }.get(sort, 'first_seen DESC')
     
-    cursor.execute(f"SELECT * FROM listings ORDER BY {order_by}")
+    # Pobierz wszystkie dane i posortuj w Pythonie dla bardziej złożonych przypadków
+    cursor.execute("SELECT * FROM listings")
     rows = cursor.fetchall()
     conn.close()
     
+    rows = cursor.fetchall()
     listings = []
     for row in rows:
         listing = dict(row)
         # Parse raw_data to extract additional fields
         try:
-            raw_data_str = listing.get('raw_data', '{}') # Get raw_data string, default to empty JSON string
+            raw_data_str = listing.get('raw_data', '{}')
+            # Konwertuj cenę na float jeśli to możliwe
+            try:
+                listing['price'] = float(listing['price']) if listing.get('price') and str(listing['price']).replace('.', '').isdigit() else listing.get('price')
+            except (ValueError, TypeError):
+                pass
             print(f"Processing listing URL: {listing.get('url')}, Raw data string from DB: {raw_data_str[:200]}...") # Log raw_data
             raw_data = json.loads(raw_data_str)
             
@@ -54,6 +61,16 @@ def get_listings_from_db():
             listing['description'] = listing.get('description', 'N/A') # Fallback to column description
         listings.append(listing)
     
+    # Sortowanie w Pythonie dla bardziej złożonych przypadków
+    if sort == 'price_asc':
+        listings.sort(key=lambda x: float(x['price']) if x.get('price') and str(x['price']).replace('.', '').isdigit() else float('inf'))
+    elif sort == 'price_desc':
+        listings.sort(key=lambda x: float(x['price']) if x.get('price') and str(x['price']).replace('.', '').isdigit() else float('-inf'), reverse=True)
+    elif sort == 'date_asc':
+        listings.sort(key=lambda x: x.get('first_seen', ''))
+    else:  # date_desc
+        listings.sort(key=lambda x: x.get('first_seen', ''), reverse=True)
+
     return listings
 
 @app.route('/')
