@@ -281,9 +281,9 @@ class OtodomScraper(BaseScraper):
             gallery = soup.find('div', {'class': 'css-1g43fk1'})  # Alternative gallery class
             
         if gallery:
+            # Try both src and data-src attributes
             image_tags = gallery.find_all('img', {'src': True})
             if not image_tags:
-                # Try lazy-loaded images
                 image_tags = gallery.find_all('img', {'data-src': True})
                 image_tags = [{'src': img['data-src']} for img in image_tags]
         
@@ -300,12 +300,14 @@ class OtodomScraper(BaseScraper):
         for img in image_tags:
             src = img.get('src') or img.get('data-src')
             if src and src.startswith(('http://', 'https://')):
-                details['images'].append(src)
+                # Clean up image URL - remove size parameters
+                clean_src = src.split('?')[0].split(';')[0]
+                details['images'].append(clean_src)
         
         details['image_count'] = len(details['images'])
         
-        # Set main image - check multiple possible sources
-        if not main_image and details['images']:
+        # Set main image - prioritize explicit main_image, then first image
+        if details['images']:
             main_image = details['images'][0]
         
         details['main_image'] = main_image
