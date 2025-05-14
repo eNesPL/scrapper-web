@@ -73,16 +73,23 @@ class OtodomScraper(BaseScraper):
             
             # Extract price
             price_tag = item.find('span', {'data-testid': 'ad-price'})
-            price = price_tag.get_text(strip=True).replace(' ', '').replace('zł', '') if price_tag else None
+            price = price_tag.get_text(strip=True).replace(' ', '').replace('zł', '').replace(',', '.') if price_tag else None
             
-            # Extract area and rooms
+            # Extract area, rooms and other details
             details = {}
-            for detail in item.find_all('span', {'class': 'css-1ntk0hg'}):
-                text = detail.get_text(strip=True)
-                if 'pokoi' in text:
-                    details['rooms'] = text.split()[0]
-                elif 'm²' in text:
-                    details['area'] = text.replace('m²', '').strip()
+            details_div = item.find('div', {'class': 'css-1iexl2e'})  # Main details container
+            if details_div:
+                for detail in details_div.find_all('span', {'class': 'css-1ntk0hg'}):
+                    text = detail.get_text(strip=True)
+                    if 'pokoi' in text:
+                        details['rooms'] = text.split()[0]
+                    elif 'm²' in text:
+                        details['area'] = text.replace('m²', '').strip()
+                    elif 'Piętro' in text:
+                        details['floor'] = text.replace('Piętro:', '').strip()
+            
+            # Extract location
+            location = item.find('p', {'class': 'css-1nhy6h4'})
             
             listing_data = {
                 'url': url,
@@ -90,6 +97,8 @@ class OtodomScraper(BaseScraper):
                 'price': price,
                 'rooms': details.get('rooms'),
                 'area_m2': details.get('area'),
+                'floor': details.get('floor'),
+                'location': location.get_text(strip=True) if location else None,
                 'site_name': self.site_name
             }
             listings.append(listing_data)
