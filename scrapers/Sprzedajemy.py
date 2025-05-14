@@ -22,20 +22,39 @@ class sprzedajemyScraper(BaseScraper):
         :param search_criteria: dict, search parameters (e.g., location, property_type).
         :return: HTML content (str) or None.
         """
+        import requests
+        from fake_useragent import UserAgent
+        
         print(f"[{self.site_name}] Fetching listings page with criteria: {search_criteria}")
-        # TODO: Implement actual web request to sprzedajemy.pl
-        # Example:
-        # location = search_criteria.get('location', 'warszawa')
-        # prop_type = search_criteria.get('property_type', 'mieszkanie')
-        # url = f"{self.base_url}/oferty/sprzedaz/{prop_type}/{location}"
-        # try:
-        #     response = requests.get(url, timeout=10)
-        #     response.raise_for_status()
-        #     return response.text
-        # except requests.RequestException as e:
-        #     print(f"[{self.site_name}] Error fetching listings page: {e}")
-        #     return None
-        pass
+        
+        headers = {
+            'User-Agent': UserAgent().random,
+            'Accept-Language': 'pl-PL,pl;q=0.9'
+        }
+        
+        params = {
+            'inp_category_id': 18502,  # Mieszkania
+            'inp_location_id': 20594,  # Gliwice
+            'inp_price[from]': search_criteria.get('min_price', 100000),
+            'inp_price[to]': search_criteria.get('max_price', 300000),
+            'inp_attribute_143[from]': search_criteria.get('min_area', 25),
+            'inp_attribute_145[from]': search_criteria.get('min_rooms', 2),
+            'inp_attribute_245[from]': search_criteria.get('min_year', 1950),
+            'items_per_page': 30
+        }
+        
+        try:
+            response = requests.get(
+                'https://sprzedajemy.pl/szukaj',
+                params=params,
+                headers=headers,
+                timeout=10
+            )
+            response.raise_for_status()
+            return response.text
+        except requests.RequestException as e:
+            print(f"[{self.site_name}] Error fetching listings page: {e}")
+            return None
 
     def parse_listings(self, html_content):
         """
@@ -44,27 +63,48 @@ class sprzedajemyScraper(BaseScraper):
         :return: List of dictionaries, each with at least a 'url'.
                  (e.g., [{'url': '...', 'price': '...', 'title': '...'}, ...])
         """
+        from bs4 import BeautifulSoup
         print(f"[{self.site_name}] Parsing listings page content.")
         if not html_content:
             return []
-        # TODO: Implement HTML parsing logic for sprzedajemy.pl listings page
-        # Example using BeautifulSoup:
-        # from bs4 import BeautifulSoup
-        # soup = BeautifulSoup(html_content, 'html.parser')
-        # listings = []
-        # for item in soup.find_all('div', class_='offer-item'): # Fictional class
-        #     link_tag = item.find('a', class_='offer-item-link')
-        #     title_tag = item.find('span', class_='offer-item-title')
-        #     price_tag = item.find('li', class_='offer-item-price')
-        #     if link_tag and link_tag.get('href'):
-        #         listing_data = {
-        #             'url': link_tag.get('href'),
-        #             'title': title_tag.text.strip() if title_tag else 'N/A',
-        #             'price': price_tag.text.strip() if price_tag else 'N/A'
-        #         }
-        #         listings.append(listing_data)
-        # return listings
-        return []
+
+        soup = BeautifulSoup(html_content, 'html.parser')
+        listings = []
+        
+        # Find all listing sections
+        for item in soup.find_all('li', class_='offer'):
+            # Extract URL
+            link = item.find('a', class_='offer-title')
+            if not link or not link.get('href'):
+                continue
+                
+            url = link['href']
+            if not url.startswith('http'):
+                url = f"https://sprzedajemy.pl{url}"
+            
+            # Extract title
+            title = link.get_text(strip=True)
+            
+            # Extract price
+            price_tag = item.find('p', class_='offer-price')
+            price = price_tag.get_text(strip=True) if price_tag else None
+            
+            # Extract basic details
+            details = []
+            details_tag = item.find('p', class_='offer-params')
+            if details_tag:
+                details = [d.strip() for d in details_tag.get_text(separator='|').split('|') if d.strip()]
+            
+            listing_data = {
+                'url': url,
+                'title': title,
+                'price': price,
+                'details': details,
+                'site_name': self.site_name
+            }
+            listings.append(listing_data)
+            
+        return listings
 
     def fetch_listing_details_page(self, listing_url):
         """
