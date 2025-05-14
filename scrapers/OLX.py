@@ -222,9 +222,21 @@ class OLXScraper(BaseScraper):
         details = {}
         
         try:
-            # Extract title
-            title = soup.find('h1', {'data-cy': 'ad_title'})
-            details['title'] = title.get_text().strip() if title else None
+            # Extract title from multiple possible locations
+            title = None
+            # Try new location first
+            title_div = soup.find('div', {'data-cy': 'ad_title', 'data-testid': 'ad_title'})
+            if title_div:
+                title_h4 = title_div.find('h4')
+                if title_h4:
+                    title = title_h4.get_text().strip()
+            
+            # Fallback to old location if not found
+            if not title:
+                title_h1 = soup.find('h1', {'data-cy': 'ad_title'})
+                title = title_h1.get_text().strip() if title_h1 else None
+            
+            details['title'] = title
             
             # Extract price
             price = soup.find('div', {'data-testid': 'ad-price-container'})
