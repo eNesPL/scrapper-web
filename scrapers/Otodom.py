@@ -275,6 +275,13 @@ class OtodomScraper(BaseScraper):
         image_tags = []
         main_image = None
         
+        # Try to get main image from picture tag first
+        picture_tag = soup.find('picture', {'data-sentry-component': 'MainImage'})
+        if picture_tag:
+            img_tag = picture_tag.find('img')
+            if img_tag and img_tag.get('src'):
+                main_image = img_tag['src'].split(';')[0]  # Remove size parameters
+        
         # Try multiple image locations
         gallery = soup.find('div', {'data-testid': 'gallery'})
         if not gallery:
