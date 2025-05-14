@@ -152,33 +152,36 @@ class AdresowoScraper(BaseScraper):
             
             # Extract first image URL if available
             first_image_url = None
-            # Try multiple common image selectors used on listing cards
-            img_selectors = [
-                'img.offer-card-img',
-                'img.thumbnail__img',
-                'img.picture__img',
-                'img[data-lazy]',
-                'img[src]',
-                'img[data-src]'
-            ]
-            for selector in img_selectors:
-                image_tag = section.select_one(selector)
-                if image_tag:
-                    first_image_url = image_tag.get('data-src') or image_tag.get('src') or image_tag.get('data-lazy')
-                    if first_image_url:
-                        # Make relative URLs absolute
-                        if first_image_url.startswith('//'):
-                            first_image_url = 'https:' + first_image_url
-                        elif not first_image_url.startswith(('http://', 'https://')):
-                            if first_image_url.startswith('/'):
-                                first_image_url = self.base_url + first_image_url
-                            else:
-                                first_image_url = self.base_url + '/' + first_image_url
-                        # Skip placeholder images
-                        if 'placeholder' in first_image_url.lower():
-                            first_image_url = None
-                            continue
+            # Try specific XPath-like selector first
+            image_tag = section.select_one('div.offer-card__image img')
+            if not image_tag:  # Fallback to other selectors
+                img_selectors = [
+                    'img.offer-card-img',
+                    'img.thumbnail__img',
+                    'img.picture__img',
+                    'img[data-lazy]',
+                    'img[src]',
+                    'img[data-src]'
+                ]
+                for selector in img_selectors:
+                    image_tag = section.select_one(selector)
+                    if image_tag:
                         break
+            
+            if image_tag:
+                first_image_url = image_tag.get('data-src') or image_tag.get('src') or image_tag.get('data-lazy')
+                if first_image_url:
+                    # Make relative URLs absolute
+                    if first_image_url.startswith('//'):
+                        first_image_url = 'https:' + first_image_url
+                    elif not first_image_url.startswith(('http://', 'https://')):
+                        if first_image_url.startswith('/'):
+                            first_image_url = self.base_url + first_image_url
+                        else:
+                            first_image_url = self.base_url + '/' + first_image_url
+                    # Skip placeholder images
+                    if 'placeholder' in first_image_url.lower():
+                        first_image_url = None
 
             listing_data = {
                 'url': full_url,
