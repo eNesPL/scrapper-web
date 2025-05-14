@@ -17,14 +17,15 @@ class NieruchomosciOnlineScraper(BaseScraper):
         self.base_url = "https://www.nieruchomosci-online.pl"
         self.MAX_PAGES = 5  # Maksymalna liczba stron do przeszukania
 
-    def fetch_listings_page(self, search_criteria):
+    def fetch_listings_page(self, search_criteria, page=1):
         """
         Fetches the HTML content of the main listings page from Nieruchomosci-Online.pl.
         :param search_criteria: dict, search parameters (e.g., location, property_type).
+        :param page: int, page number to fetch (default: 1)
         :return: HTML content (str) or None.
         """
         # Using the provided example URL
-        example_url = "https://www.nieruchomosci-online.pl/szukaj.html?3,mieszkanie,sprzedaz,,Gliwice:14130,,,,-300000,25,,,,,,2"
+        example_url = f"https://www.nieruchomosci-online.pl/szukaj.html?3,mieszkanie,sprzedaz,,Gliwice:14130,,,,-300000,25,,,,,,2,{page}"
         
         print(f"[{self.site_name}] Fetching listings page using URL: {example_url} (Criteria: {search_criteria})")
         
@@ -54,7 +55,9 @@ class NieruchomosciOnlineScraper(BaseScraper):
         """
         Parses the listings page HTML to extract individual listing URLs or summary data.
         :param html_content: str, HTML content of the listings page.
-        :return: List of dictionaries, each with at least a 'url'.
+        :return: Tuple of (listings, has_next_page) where:
+                 - listings: List of dictionaries, each with at least a 'url'
+                 - has_next_page: bool, True if there are more pages to scrape
         """
         print(f"[{self.site_name}] Parsing listings page content.")
         if not html_content:
@@ -136,7 +139,12 @@ class NieruchomosciOnlineScraper(BaseScraper):
                 listings.append(summary)
                 print(f"[{self.site_name}] Parsed summary: Title: {summary.get('title', 'N/A')[:30]}..., Price: {summary.get('price', 'N/A')}, Area: {summary.get('area_m2', 'N/A')}, URL: {summary.get('url')}")
 
-        return listings
+        # Check for next page button
+        soup = BeautifulSoup(html_content, 'html.parser')
+        next_page = soup.find('a', class_='pagination__next')
+        has_next_page = next_page is not None
+        
+        return listings, has_next_page
 
     def fetch_listing_details_page(self, listing_url):
         """
