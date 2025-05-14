@@ -409,10 +409,48 @@ class LentoScraper(BaseScraper):
 
 
         # Image count and First Image URL
-        # Try to find the main image first
-        main_image = soup.find('img', {'id': 'photoview_img'})
+        # Try multiple approaches to get images
+        details['image_count'] = 0
+        details['first_image_url'] = None
+
+        # Approach 1: Check preview-gallery data attribute
+        preview_gallery = soup.find('div', id='preview-gallery')
+        if preview_gallery and preview_gallery.get('data-imgcnt'):
+            try:
+                details['image_count'] = int(preview_gallery['data-imgcnt'])
+                print(f"[{self.site_name}] Image count from data-imgcnt: {details['image_count']}")
+            except ValueError:
+                pass
+
+        # Approach 2: Check thumbnails gallery
+        if details['image_count'] == 0:
+            thumbnails_gallery = soup.find('div', id='thumbnails-gallery')
+            if thumbnails_gallery:
+                image_links = thumbnails_gallery.find_all('a', href=True)
+                details['image_count'] = len(image_links)
+                print(f"[{self.site_name}] Image count from thumbnails-gallery: {details['image_count']}")
+
+        # Approach 3: Check gallery counter
+        if details['image_count'] == 0:
+            gallery_indicator = soup.find('div', class_='counter')
+            if gallery_indicator:
+                indicator_text = gallery_indicator.get_text(strip=True)
+                match = re.search(r'\d+\s*/\s*(\d+)', indicator_text)
+                if match:
+                    details['image_count'] = int(match.group(1))
+                    print(f"[{self.site_name}] Image count from counter: {details['image_count']}")
+
+        # Get first image URL from multiple possible sources
+        # Source 1: Main image in preview
+        main_image = soup.find('div', id='big-img').find('img') if soup.find('div', id='big-img') else None
+        if not main_image:
+            main_image = soup.find('img', {'id': 'photoview_img'})
+
         if main_image:
-            img_src = main_image.get('src') or main_image.get('data-src')
+            img_src = (main_image.get('src') or 
+                      main_image.get('data-src') or
+                      main_image.find_parent('picture').find('source').get('srcset') if main_image.find_parent('picture') else None)
+            
             if img_src:
                 if img_src.startswith('//'):
                     details['first_image_url'] = f"https:{img_src}"
@@ -422,24 +460,7 @@ class LentoScraper(BaseScraper):
                     details['first_image_url'] = img_src
                 print(f"[{self.site_name}] Found main image: {details['first_image_url']}")
 
-        # Try to find the thumbnails gallery for image count
-        thumbnails_gallery = soup.find('div', id='thumbnails-gallery')
-        if thumbnails_gallery:
-            image_links = thumbnails_gallery.find_all('a', href=True)
-            details['image_count'] = len(image_links)
-            print(f"[{self.site_name}] Image count from thumbnails-gallery: {details['image_count']}")
-        else:
-            print(f"[{self.site_name}] thumbnails-gallery not found. Falling back for image count.")
-            # Fallback for image count if thumbnails-gallery is not found
-            gallery_indicator = soup.find('div', class_='counter') # e.g., <div class="counter">1 / 12</div>
-            if gallery_indicator:
-                indicator_text = gallery_indicator.get_text(strip=True)
-                match = re.search(r'\d+\s*/\s*(\d+)', indicator_text)
-                if match:
-                    details['image_count'] = int(match.group(1))
-            print(f"[{self.site_name}] Image count from indicator (fallback): {details['image_count']}")
-
-        # If we have first image but no count, assume at least 1 image
+        # If we have first image but count is still 0, set to at least 1
         if details['first_image_url'] and details['image_count'] == 0:
             details['image_count'] = 1
 
