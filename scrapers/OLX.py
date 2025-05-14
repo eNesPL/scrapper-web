@@ -106,7 +106,7 @@ class OLXScraper(BaseScraper):
                     
                 url = link['href']
                 if "otodom.pl" in url:
-                    url = url.split('?')[0]  # Usuń parametry śledzenia
+                    continue  # Ignoruj oferty z Otodom
                 if not url.startswith('http'):
                     url = f"https://www.olx.pl{url}"
                 
