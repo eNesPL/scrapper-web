@@ -76,10 +76,10 @@ class sprzedajemyScraper(BaseScraper):
         listings = []
         
         # Find all listing sections
-        for item in soup.find_all('li', class_='offer'):
+        for item in soup.find_all('li', class_=lambda x: x and 'offer' in x.split()):
             try:
                 # Extract URL
-                link = item.find('a', class_='offer-title')
+                link = item.find('a', class_='offerLink')
                 if not link or not link.get('href'):
                     continue
                     
@@ -88,25 +88,33 @@ class sprzedajemyScraper(BaseScraper):
                     url = f"https://sprzedajemy.pl{url}"
                 
                 # Extract title
-                title = link.get_text(strip=True)
+                title = link.get('title', '').strip()
+                if not title:
+                    title = link.get_text(strip=True)
                 
                 # Extract price
-                price_tag = item.find('p', class_='offer-price')
+                price_tag = item.find('span', class_='price')
                 price = price_tag.get_text(strip=True).replace(' ', '').replace('zł', '') if price_tag else None
                 
                 # Extract basic details
                 details = {}
-                params = item.find('p', class_='offer-params')
+                params = item.find('p', class_='attributes')
                 if params:
-                    parts = params.get_text(separator='|').split('|')
-                    for part in parts:
-                        if ':' in part:
-                            key, val = part.split(':', 1)
-                            details[key.strip()] = val.strip()
+                    for attr in params.find_all('span', class_='attribute'):
+                        parts = attr.get_text(strip=True).split(':')
+                        if len(parts) >= 2:
+                            key = parts[0].strip()
+                            val = ':'.join(parts[1:]).strip()
+                            details[key] = val
                 
                 # Extract additional info
-                location = item.find('a', class_='offer-location').get_text(strip=True) if item.find('a', class_='offer-location') else None
-                date = item.find('span', class_='offer-date').get_text(strip=True) if item.find('span', class_='offer-date') else None
+                location = item.find('strong', class_='city').get_text(strip=True) if item.find('strong', class_='city') else None
+                date = item.find('time', class_='time')
+                date = date['datetime'] if date and date.get('datetime') else None
+                
+                # Extract image
+                img = item.find('img', class_=lambda x: not x or 'lazy' in x.split())
+                image_url = img['src'] if img and img.get('src') else None
                 
                 listing_data = {
                     'url': url,
@@ -115,6 +123,7 @@ class sprzedajemyScraper(BaseScraper):
                     'location': location,
                     'date': date,
                     'details': details,
+                    'image_url': image_url,
                     'site_name': self.site_name
                 }
                 listings.append(listing_data)
