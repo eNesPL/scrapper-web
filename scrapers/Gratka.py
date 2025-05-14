@@ -106,15 +106,23 @@ class GratkaScraper(BaseScraper):
 
             # Price
             # Price is often in <p class="priceInfo__value"> or similar structure
-            price_tag = item_element.find('p', class_='priceInfo__value')
-            if price_tag:
-                summary['price'] = price_tag.get_text(strip=True)
-            else: # Fallback for other price structures
-                price_span = item_element.find('span', attrs={"data-testid": "price"})
-                if price_span:
-                    summary['price'] = price_span.get_text(strip=True)
-                else:
-                    summary['price'] = 'N/A'
+            # Try multiple price element patterns
+            price_elements = [
+                item_element.find('p', class_='priceInfo__value'),
+                item_element.find('span', attrs={"data-testid": "price"}),
+                item_element.find('span', class_='teaserUnified__price'),
+                item_element.find('span', class_='price'),
+                item_element.find('span', class_='value')
+            ]
+            
+            for price_element in price_elements:
+                if price_element:
+                    price_text = price_element.get_text(strip=True)
+                    if price_text and price_text.lower() != 'zapytaj o cenę':
+                        summary['price'] = price_text
+                        break
+            else:
+                summary['price'] = 'N/A'
             
             if summary.get('url'): # Ensure we have a URL before adding
                 listings.append(summary)
@@ -320,7 +328,7 @@ class GratkaScraper(BaseScraper):
 
 
         # --- Attempt to extract Area using BeautifulSoup as a fallback or primary if XPath failed ---
-        if details['area_m2'] == 'N/A' or not lxml_tree: # If XPath failed or lxml not available
+        if details['area_m2'] == 'N/A' or lxml_tree is None: # If XPath failed or lxml not available
             print(f"[{self.site_name}] Attempting to extract area using BeautifulSoup.")
             # Common pattern: parameters are often in a list or divs.
             # Look for a span/div containing "m²" or near a label "Powierzchnia"
