@@ -228,7 +228,7 @@ class sprzedajemyScraper(BaseScraper):
                     description.append(text)
         details['description'] = '\n\n'.join(description) if description else 'Brak opisu'
 
-        # Extract all images safely
+        # Extract all images safely - ensure images is always a list
         details['images'] = []
         details['image_count'] = 0
         gallery = soup.find('div', class_='image-gallery')
