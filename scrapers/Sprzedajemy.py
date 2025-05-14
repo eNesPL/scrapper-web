@@ -169,54 +169,46 @@ class sprzedajemyScraper(BaseScraper):
         soup = BeautifulSoup(html_content, 'html.parser')
         details = {}
 
-        # Extract title
-        title_tag = soup.find('h1')
-        details['title'] = title_tag.get_text(strip=True) if title_tag else 'N/A'
+        # Extract basic info
+        details['title'] = soup.find('h1').get_text(strip=True) if soup.find('h1') else 'N/A'
+        details['location'] = soup.find('a', class_='location').get_text(strip=True) if soup.find('a', class_='location') else None
+        details['date'] = soup.find('time').get('datetime') if soup.find('time') else None
 
-        # Extract price and price per m2
+        # Extract price information
         price_tag = soup.find('span', class_='price')
         if price_tag:
-            price = price_tag.get_text(strip=True).replace(' ', '').replace('zł', '')
-            details['price'] = price
-            
-            # Try multiple ways to find price per m2
-            price_per_m2 = None
-            price_per_m2_tag = soup.find(text=lambda t: 'zł/m²' in t)
-            if price_per_m2_tag:
-                price_per_m2 = price_per_m2_tag.strip()
-            else:
-                price_per_m2_tag = soup.find('span', class_='price-per-m2')
-                if price_per_m2_tag:
-                    price_per_m2 = price_per_m2_tag.get_text(strip=True)
-            details['price_per_m2'] = price_per_m2
+            details['price'] = price_tag.get_text(strip=True).replace(' ', '').replace('zł', '')
+            price_per_m2 = soup.find(text=lambda t: 'zł/m²' in t)
+            details['price_per_m2'] = price_per_m2.strip() if price_per_m2 else None
 
-        # Extract description from multiple possible sections
-        description = []
-        desc_section = soup.find('div', class_='description-section')
-        if desc_section:
-            for p in desc_section.find_all('p'):
-                if p.get_text(strip=True):
-                    description.append(p.get_text(strip=True))
-        else:
-            for p in soup.find_all('p', class_='description-text'):
-                if p.get_text(strip=True):
-                    description.append(p.get_text(strip=True))
-        details['description'] = '\n\n'.join(description) if description else 'N/A'
-
-        # Extract parameters from property details section
-        params = {}
+        # Extract property details
         details_section = soup.find('div', class_='property-details')
         if details_section:
+            details['params'] = {}
             for row in details_section.find_all('div', class_='detail-row'):
                 key = row.find('span', class_='detail-label')
                 value = row.find('span', class_='detail-value')
                 if key and value:
-                    params[key.get_text(strip=True)] = value.get_text(strip=True)
-        details['params'] = params
+                    details['params'][key.get_text(strip=True)] = value.get_text(strip=True)
 
-        # Extract images from gallery
+        # Extract description
+        description = []
+        desc_section = soup.find('div', class_='description-section') or soup.find('div', class_='offer-description')
+        if desc_section:
+            for p in desc_section.find_all('p'):
+                text = p.get_text(strip=True)
+                if text:
+                    description.append(text)
+        details['description'] = '\n\n'.join(description) if description else 'N/A'
+
+        # Extract additional features
+        features_section = soup.find('div', class_='additional-features')
+        if features_section:
+            details['features'] = [li.get_text(strip=True) for li in features_section.find_all('li')]
+
+        # Extract images
         images = []
-        gallery = soup.find('div', class_='gallery-container')
+        gallery = soup.find('div', class_='gallery-container') or soup.find('div', class_='image-gallery')
         if gallery:
             for img in gallery.find_all('img', loading='lazy'):
                 if img.get('src'):
@@ -224,16 +216,19 @@ class sprzedajemyScraper(BaseScraper):
         details['images'] = images
         details['image_count'] = len(images)
 
-        # Extract additional info
-        details['location'] = soup.find('span', class_='location-text').get_text(strip=True) if soup.find('span', class_='location-text') else None
-        date_tag = soup.find('time') or soup.find('span', class_='date-text')
-        details['date'] = date_tag.get('datetime') if date_tag and date_tag.get('datetime') else date_tag.get_text(strip=True) if date_tag else None
-        details['seller_type'] = soup.find('div', class_='seller-info').get_text(strip=True) if soup.find('div', class_='seller-info') else None
+        # Extract seller info
+        seller_info = soup.find('div', class_='seller-info')
+        if seller_info:
+            details['seller'] = {
+                'name': seller_info.find('span', class_='seller-name').get_text(strip=True) if seller_info.find('span', class_='seller-name') else None,
+                'type': seller_info.find('span', class_='seller-type').get_text(strip=True) if seller_info.find('span', class_='seller-type') else None,
+                'since': seller_info.find('span', class_='seller-since').get_text(strip=True) if seller_info.find('span', class_='seller-since') else None
+            }
 
-        # Ensure all required fields are present
-        details.setdefault('title', 'N/A')
+        # Ensure required fields
         details.setdefault('price', 'N/A')
         details.setdefault('description', 'N/A')
         details.setdefault('image_count', 0)
+        details.setdefault('params', {})
 
         return details
