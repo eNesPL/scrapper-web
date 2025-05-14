@@ -275,27 +275,40 @@ class OtodomScraper(BaseScraper):
         image_tags = []
         main_image = None
         
-        # Try main gallery images
+        # Try multiple image locations
         gallery = soup.find('div', {'data-testid': 'gallery'})
+        if not gallery:
+            gallery = soup.find('div', {'class': 'css-1g43fk1'})  # Alternative gallery class
+            
         if gallery:
             image_tags = gallery.find_all('img', {'src': True})
-            if image_tags:
-                main_image = image_tags[0]['src']
-        else:
-            # Fallback to other image locations
+            if not image_tags:
+                # Try lazy-loaded images
+                image_tags = gallery.find_all('img', {'data-src': True})
+                image_tags = [{'src': img['data-src']} for img in image_tags]
+        
+        # Fallback to other image locations
+        if not image_tags:
             image_tags = soup.find_all('img', {
                 'data-cy': lambda x: x and 'image' in x.lower()
             })
-            if not image_tags:
-                image_tags = soup.select('img[src*="ireland.apollo.olxcdn.com"]')
-            if image_tags:
-                main_image = image_tags[0]['src']
+        if not image_tags:
+            image_tags = soup.select('img[src*="ireland.apollo.olxcdn.com"]')
         
         # Clean and store all image URLs
-        details['images'] = [img['src'] for img in image_tags if img.get('src')]
+        details['images'] = []
+        for img in image_tags:
+            src = img.get('src') or img.get('data-src')
+            if src and src.startswith(('http://', 'https://')):
+                details['images'].append(src)
+        
         details['image_count'] = len(details['images'])
-        # Set main image - prioritize explicit main_image, then first image, then None
-        details['main_image'] = main_image or details['images'][0] if details['images'] else None
+        
+        # Set main image - check multiple possible sources
+        if not main_image and details['images']:
+            main_image = details['images'][0]
+        
+        details['main_image'] = main_image
 
         # Add site name
         details['site_name'] = self.site_name
