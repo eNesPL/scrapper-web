@@ -126,28 +126,77 @@ class OtodomScraper(BaseScraper):
         title_tag = soup.find('h1', {'data-cy': 'adPageAdTitle'})
         details['title'] = title_tag.get_text(strip=True) if title_tag else 'N/A'
 
-        # Extract price
+        # Extract price - multiple potential locations
+        price = None
+        # Try main price header first
         price_tag = soup.find('strong', {'data-cy': 'adPageHeaderPrice'})
         if price_tag:
-            price = price_tag.get_text(strip=True)
-            details['price'] = price.replace(' ', '').replace('zł', '').replace(',', '.')
+            price_text = price_tag.get_text(strip=True)
+            price = price_text.replace(' ', '').replace('zł', '').replace(',', '.').strip()
+        
+        # Fallback to price in description if not found
+        if not price:
+            price_div = soup.find('div', string=lambda t: t and any(x in t.lower() for x in ['cena', 'price']))
+            if price_div:
+                price_text = price_div.find_next('div').get_text(strip=True)
+                price = price_text.replace(' ', '').replace('zł', '').replace(',', '.').strip()
+        
+        if price:
+            # Clean price string - remove non-numeric chars except dot
+            price = ''.join(c for c in price if c.isdigit() or c in ('.', ','))
+            # Handle Polish decimal separator
+            price = price.replace(',', '.')
+            try:
+                price = float(price)
+                details['price'] = price
+            except (ValueError, TypeError):
+                details['price'] = None
 
         # Extract description
         desc_tag = soup.find('div', {'data-cy': 'adPageAdDescription'})
         details['description'] = desc_tag.get_text(strip=True) if desc_tag else 'N/A'
 
-        # Extract parameters
+        # Extract parameters from multiple possible sections
         params = {}
+        
+        # Standard parameters section
         for param in soup.find_all('div', {'class': 'css-1qzszy5'}):
             name = param.find('div', {'class': 'css-1wi2w6s'})
             value = param.find('div', {'class': 'css-1ytkscc'})
             if name and value:
                 params[name.get_text(strip=True)] = value.get_text(strip=True)
+        
+        # Additional parameters section (e.g. in developer listings)
+        extra_params = soup.find('div', {'data-testid': 'ad.top-information.table'})
+        if extra_params:
+            for row in extra_params.find_all('div', {'data-testid': 'table-row'}):
+                cells = row.find_all('div')
+                if len(cells) >= 2:
+                    name = cells[0].get_text(strip=True)
+                    value = cells[1].get_text(strip=True)
+                    if name and value:
+                        params[name.replace(':', '')] = value
 
-        # Extract important parameters
-        details['area_m2'] = params.get('Powierzchnia', '').replace('m²', '').strip()
-        details['rooms'] = params.get('Liczba pokoi', '').replace('pokoje', '').strip()
-        details['floor'] = params.get('Piętro', 'N/A')
+        # Extract and standardize important parameters
+        def clean_area(area_str):
+            if not area_str:
+                return None
+            try:
+                return float(area_str.replace('m²', '').replace(',', '.').strip())
+            except (ValueError, TypeError):
+                return None
+
+        def clean_rooms(rooms_str):
+            if not rooms_str:
+                return None
+            try:
+                return int(rooms_str.split()[0])
+            except (ValueError, TypeError):
+                return None
+
+        details['area_m2'] = clean_area(params.get('Powierzchnia') or params.get('Powierzchni', ''))
+        details['rooms'] = clean_rooms(params.get('Liczba pokoi') or params.get('Liczba pokoji', ''))
+        details['floor'] = params.get('Piętro', 'N/A').split('/')[0].strip()  # Handle format like "parter/2"
 
         # Extract image count
         images = soup.find_all('img', {'class': 'css-1bmvjcs'})
