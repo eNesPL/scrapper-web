@@ -225,6 +225,14 @@ class sprzedajemyScraper(BaseScraper):
                         params['floor'] = value
                     else:
                         params[key] = value
+        
+        # Alternative way to extract area if not found in attributes box
+        if 'area' not in params:
+            area_element = soup.select_one('div.article-content section div div ul li:nth-of-type(5) strong')
+            if area_element:
+                area_text = area_element.get_text(strip=True)
+                if 'm²' in area_text:
+                    params['area'] = area_text.replace('m²', '').strip()
         details['params'] = params
 
         # Extract description
