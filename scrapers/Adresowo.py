@@ -186,7 +186,12 @@ class AdresowoScraper(BaseScraper):
             listings.append(listing_data)
             
         print(f"[{self.site_name}] Parsed {len(listings)} listings from page based on new criteria.")
-        return listings
+        
+        # Check if there are more pages by looking for pagination controls
+        next_page = soup.find('a', class_='next')
+        has_next_page = next_page is not None and len(listings) > 0
+        
+        return listings, has_next_page
 
     def fetch_listing_details_page(self, listing_url):
         """
