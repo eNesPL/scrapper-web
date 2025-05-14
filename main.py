@@ -98,36 +98,25 @@ def main():
         scraper_display_list.append({'id': i + 1, 'name': site_display_name, 'class_name': class_name, 'class': scraper_class})
         print(f"{i + 1}. {site_display_name} (Klasa: {class_name})")
     
+    # Automatycznie wybierz scraper Morizon.pl
     selected_scraper_info = None
-    if not scraper_display_list: # Should be caught by available_scrapers_dict check, but good for safety
-        print("No scrapers available to run.")
-        return
-
-    while True:
-        try:
-            choice_str = input(f"\nWybierz numer scrapera do uruchomienia (1-{len(scraper_display_list)}): ")
-            choice = int(choice_str)
-            if choice == 0:
-                selected_scraper_info = "ALL"
-                break
-            elif 1 <= choice <= len(scraper_display_list):
-                selected_scraper_info = scraper_display_list[choice - 1]
-                break
-            else:
-                print(f"Nieprawidłowy wybór. Proszę podać liczbę między 0 a {len(scraper_display_list)}.")
-        except ValueError:
-            print("Nieprawidłowe dane wejściowe. Proszę podać liczbę.")
-        except KeyboardInterrupt:
-            print("\nExiting.")
-            return
+    for scraper in scraper_display_list:
+        if scraper['name'] == 'Morizon.pl':
+            selected_scraper_info = scraper
+            break
+    
+    if not selected_scraper_info and scraper_display_list:
+        selected_scraper_info = scraper_display_list[0]  # Fallback na pierwszy scraper
     
     if selected_scraper_info:
         if selected_scraper_info == "ALL":
             print("\nRunning ALL scrapers...")
             search_criteria = {
-                'location': 'Sample City',
+                'location': 'Gliwice',
                 'property_type': 'apartment',
-                'min_beds': 2
+                'min_beds': 2,
+                'max_price': 300000,
+                'min_area': 25
             }
             
             for scraper_info in scraper_display_list:
