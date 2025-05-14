@@ -15,6 +15,7 @@ class SzybkoScraper(BaseScraper):
                          db_manager=db_manager,
                          notification_manager=notification_manager)
         # self.base_url = "https://www.szybko.pl" # Example base URL
+        self.MAX_PAGES = 5  # Maksymalna liczba stron do przeszukania
 
     def fetch_listings_page(self, search_criteria):
         """

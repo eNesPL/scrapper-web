@@ -18,6 +18,7 @@ class AdresowoScraper(BaseScraper):
                          db_manager=db_manager,
                          notification_manager=notification_manager)
         self.base_url = "https://adresowo.pl"
+        self.MAX_PAGES = 5  # Maksymalna liczba stron do przeszukania
         # Using the hardcoded URL as requested for fetching listings
         self.hardcoded_listings_url = "https://adresowo.pl/f/mieszkania/gliwice/a25_ff0f1p2p3_p-30"
 
