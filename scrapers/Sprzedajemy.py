@@ -188,9 +188,11 @@ class sprzedajemyScraper(BaseScraper):
         soup = BeautifulSoup(html_content, 'html.parser')
         details = {}
 
-        # Extract main image
+        # Extract main image safely
+        details['main_image'] = None
         main_img = soup.select_one('div.image-gallery img')
-        details['main_image'] = main_img['src'] if main_img and main_img.get('src') else None
+        if main_img and main_img.get('src'):
+            details['main_image'] = main_img['src'] if main_img['src'].startswith(('http://', 'https://')) else None
 
         # Extract price
         price_span = soup.select_one('section.pricing-box strong span.price')
@@ -218,15 +220,18 @@ class sprzedajemyScraper(BaseScraper):
                     description.append(text)
         details['description'] = '\n\n'.join(description) if description else 'N/A'
 
-        # Extract all images
-        images = []
+        # Extract all images safely
+        details['images'] = []
+        details['image_count'] = 0
         gallery = soup.find('div', class_='image-gallery')
         if gallery:
-            for img in gallery.find_all('img', loading='lazy'):
-                if img.get('src'):
-                    images.append(img['src'])
-        details['images'] = images
-        details['image_count'] = len(images)
+            images = []
+            for img in gallery.find_all('img', loading=lambda x: x in ['lazy', None]):
+                src = img.get('src')
+                if src and src.startswith(('http://', 'https://')):
+                    images.append(src)
+            details['images'] = images
+            details['image_count'] = len(images)
 
         # Ensure required fields
         details.setdefault('title', soup.find('h1').get_text(strip=True) if soup.find('h1') else 'N/A')
