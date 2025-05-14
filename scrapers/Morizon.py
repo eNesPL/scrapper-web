@@ -154,6 +154,12 @@ class MorizonScraper(BaseScraper):
         
         return listings, has_next_page
 
+        # Check for next page button
+        next_page = soup.find('a', class_='pagination__next')
+        has_next_page = next_page is not None
+        
+        return listings, has_next_page
+
     def fetch_listing_details_page(self, listing_url):
         """
         Fetches an individual listing's detail page HTML from Morizon.pl.

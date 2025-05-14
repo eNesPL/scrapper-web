@@ -85,7 +85,11 @@ def get_listings_from_db():
         listings.sort(key=lambda x: x.get('first_seen', ''), reverse=True)
 
     conn.close()
-    return listings
+    # Check for next page button
+    next_page = soup.find('a', class_='pagination__next')
+    has_next_page = next_page is not None
+        
+    return listings, has_next_page
 
 @app.route('/')
 def index():
