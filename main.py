@@ -80,8 +80,8 @@ def main():
         print("inherit from BaseScraper, and that 'scrapers/__init__.py' exists.")
         return
 
-    print("\nAvailable scrapers:")
-    print("0. Run ALL scrapers")
+    print("\nDostępne scrapers:")
+    print("0. Uruchom WSZYSTKIE scrapers")
     scraper_display_list = []
     # Sort scrapers by class name for consistent ordering
     sorted_scraper_items = sorted(available_scrapers_dict.items())
@@ -91,12 +91,12 @@ def main():
             temp_instance = scraper_class(db_manager=None, notification_manager=None)
             site_display_name = temp_instance.site_name
         except TypeError as e: 
-            site_display_name = f"{class_name} (Error: __init__ signature mismatch? {e})"
+            site_display_name = f"{class_name} (Błąd: nieprawidłowa sygnatura __init__? {e})"
         except Exception as e:
-            site_display_name = f"{class_name} (Error during init for discovery: {e})"
+            site_display_name = f"{class_name} (Błąd podczas inicjalizacji: {e})"
         
         scraper_display_list.append({'id': i + 1, 'name': site_display_name, 'class_name': class_name, 'class': scraper_class})
-        print(f"{i + 1}. {site_display_name} (Class: {class_name})")
+        print(f"{i + 1}. {site_display_name} (Klasa: {class_name})")
     
     selected_scraper_info = None
     if not scraper_display_list: # Should be caught by available_scrapers_dict check, but good for safety
@@ -105,7 +105,7 @@ def main():
 
     while True:
         try:
-            choice_str = input(f"\nEnter the number of the scraper to run (1-{len(scraper_display_list)}): ")
+            choice_str = input(f"\nWybierz numer scrapera do uruchomienia (1-{len(scraper_display_list)}): ")
             choice = int(choice_str)
             if choice == 0:
                 selected_scraper_info = "ALL"
@@ -114,9 +114,9 @@ def main():
                 selected_scraper_info = scraper_display_list[choice - 1]
                 break
             else:
-                print(f"Invalid choice. Please enter a number between 0 and {len(scraper_display_list)}.")
+                print(f"Nieprawidłowy wybór. Proszę podać liczbę między 0 a {len(scraper_display_list)}.")
         except ValueError:
-            print("Invalid input. Please enter a number.")
+            print("Nieprawidłowe dane wejściowe. Proszę podać liczbę.")
         except KeyboardInterrupt:
             print("\nExiting.")
             return
