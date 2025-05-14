@@ -190,24 +190,28 @@ class OtodomScraper(BaseScraper):
         params = {}
         
         # Main parameters section - new structure
-        params_section = soup.find('div', {'data-testid': 'ad.top-information.table'})
-        if params_section:
-            for row in params_section.find_all('div', {'data-testid': 'table-row'}):
-                cells = row.find_all('div')
-                if len(cells) >= 2:
-                    name = cells[0].get_text(strip=True).replace(':', '')
-                    value = cells[1].get_text(strip=True)
+        details_container = soup.find('div', {'data-sentry-component': 'AdDetailsBase'})
+        if details_container:
+            # Extract all parameters from item grids
+            for item_grid in details_container.find_all('div', {'class': 'css-1xw0jqp'}):
+                items = item_grid.find_all('p', {'class': 'css-1airkmu'})
+                if len(items) >= 2:
+                    name = items[0].get_text(strip=True).replace(':', '').replace('<!-- -->', '')
+                    value = items[1].get_text(strip=True).replace('<!-- -->', '')
                     if name and value:
                         params[name] = value
 
-        # Alternative parameters section - item grid
-        item_grid = soup.find('div', {'class': 'css-1xw0jqp'})
-        if item_grid:
-            for item in item_grid.find_all('div', {'class': 'css-1airkmu'}):
-                if 'Powierzchnia' in item.get_text():
-                    area_value = item.find_next('div', {'class': 'css-1airkmu'})
-                    if area_value:
-                        params['Powierzchnia'] = area_value.get_text(strip=True).replace('m²', '').replace(' ', '')
+        # Fallback to old structure if not found
+        if not params:
+            params_section = soup.find('div', {'data-testid': 'ad.top-information.table'})
+            if params_section:
+                for row in params_section.find_all('div', {'data-testid': 'table-row'}):
+                    cells = row.find_all('div')
+                    if len(cells) >= 2:
+                        name = cells[0].get_text(strip=True).replace(':', '')
+                        value = cells[1].get_text(strip=True)
+                        if name and value:
+                            params[name] = value
 
         # Additional parameters from description
         description = soup.find('div', {'data-cy': 'adPageAdDescription'})
