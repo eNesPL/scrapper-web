@@ -182,16 +182,29 @@ class OtodomScraper(BaseScraper):
             except (ValueError, TypeError):
                 details['price'] = None
 
-        # Extract description from main content section
-        description_div = soup.select_one('div[class*="css-1shxysy"], div[class*="css-1wyfyx5"]')
-        if description_div:
-            # Clean up description while keeping structure
-            description = '\n'.join(p.get_text().strip() 
-                                  for p in description_div.find_all(['p', 'div']) 
-                                  if p.get_text().strip())
-            details['description'] = description or 'Brak szczegółowego opisu'
-        else:
-            details['description'] = 'Brak opisu'
+        # Extract description from multiple possible locations
+        description = ''
+        
+        # Try main description section first
+        desc_div = soup.find('div', {'data-cy': 'adPageAdDescription'})
+        if desc_div:
+            description = desc_div.get_text(strip=True)
+        
+        # Fallback to alternative locations
+        if not description:
+            desc_div = soup.select_one('div[class*="css-1shxysy"], div[class*="css-1wyfyx5"]')
+            if desc_div:
+                description = '\n'.join(p.get_text().strip() 
+                                      for p in desc_div.find_all(['p', 'div']) 
+                                      if p.get_text().strip())
+        
+        # Final fallback to content section
+        if not description:
+            content_section = soup.select_one('div.css-1hzn8e1, div.css-6wauch')
+            if content_section:
+                description = content_section.get_text(strip=True)
+        
+        details['description'] = description.strip() if description else 'Brak opisu'
 
         # Extract parameters from multiple possible sections
         params = {}
