@@ -441,20 +441,26 @@ class LentoScraper(BaseScraper):
                     print(f"[{self.site_name}] Image count from counter: {details['image_count']}")
 
         # Get first image URL from multiple possible sources
-        # Source 1: Check big-img container
-        big_img_div = soup.find('div', id='big-img')
-        if big_img_div:
-            img_tag = big_img_div.find('img')
-            if img_tag:
-                img_src = img_tag.get('src') or img_tag.get('data-src')
-                if not img_src:
-                    picture_tag = big_img_div.find('picture')
-                    if picture_tag:
-                        source_tag = picture_tag.find('source')
-                        if source_tag:
-                            img_src = source_tag.get('srcset')
+        # Source 1: Check for images with class "width-100"
+        img_tag = soup.find('img', class_='width-100')
+        if img_tag:
+            img_src = img_tag.get('src') or img_tag.get('data-src')
+            if not img_src:
+                picture_tag = img_tag.find_parent('picture')
+                if picture_tag:
+                    source_tag = picture_tag.find('source')
+                    if source_tag:
+                        img_src = source_tag.get('srcset')
         
-        # Source 2: Check mobile gallery
+        # Source 2: Check big-img container
+        if not img_src:
+            big_img_div = soup.find('div', id='big-img')
+            if big_img_div:
+                img_tag = big_img_div.find('img')
+                if img_tag:
+                    img_src = img_tag.get('src') or img_tag.get('data-src')
+        
+        # Source 3: Check mobile gallery
         if not img_src:
             mobile_gallery = soup.find('div', id='mobile-gallery')
             if mobile_gallery:
@@ -462,7 +468,7 @@ class LentoScraper(BaseScraper):
                 if img_tag:
                     img_src = img_tag.get('src') or img_tag.get('data-lazy') or img_tag.get('data-src')
         
-        # Source 3: Check thumbnails gallery
+        # Source 4: Check thumbnails gallery
         if not img_src:
             thumbnails_gallery = soup.find('div', id='thumbnails-gallery')
             if thumbnails_gallery:
