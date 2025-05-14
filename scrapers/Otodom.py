@@ -17,10 +17,11 @@ class OtodomScraper(BaseScraper):
         self.MAX_PAGES = 5  # Maksymalna liczba stron do przeszukania
         # self.base_url = "https://www.otodom.pl" # Example base URL
 
-    def fetch_listings_page(self, search_criteria):
+    def fetch_listings_page(self, search_criteria, page=1):
         """
         Fetches the HTML content of the main listings page from Otodom.pl.
         :param search_criteria: dict, search parameters (e.g., location, property_type).
+        :param page: int, page number to fetch (default: 1)
         :return: HTML content (str) or None.
         """
         print(f"[{self.site_name}] Fetching listings page with criteria: {search_criteria}")
