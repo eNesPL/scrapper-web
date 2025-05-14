@@ -44,27 +44,51 @@ class OtodomScraper(BaseScraper):
         :return: List of dictionaries, each with at least a 'url'.
                  (e.g., [{'url': '...', 'price': '...', 'title': '...'}, ...])
         """
+        from bs4 import BeautifulSoup
         print(f"[{self.site_name}] Parsing listings page content.")
         if not html_content:
             return []
-        # TODO: Implement HTML parsing logic for Otodom.pl listings page
-        # Example using BeautifulSoup:
-        # from bs4 import BeautifulSoup
-        # soup = BeautifulSoup(html_content, 'html.parser')
-        # listings = []
-        # for item in soup.find_all('div', class_='offer-item'): # Fictional class
-        #     link_tag = item.find('a', class_='offer-item-link')
-        #     title_tag = item.find('span', class_='offer-item-title')
-        #     price_tag = item.find('li', class_='offer-item-price')
-        #     if link_tag and link_tag.get('href'):
-        #         listing_data = {
-        #             'url': link_tag.get('href'),
-        #             'title': title_tag.text.strip() if title_tag else 'N/A',
-        #             'price': price_tag.text.strip() if price_tag else 'N/A'
-        #         }
-        #         listings.append(listing_data)
-        # return listings
-        return []
+
+        soup = BeautifulSoup(html_content, 'html.parser')
+        listings = []
+        
+        for item in soup.find_all('div', {'data-cy': 'listing-item'}):
+            # Extract URL
+            link = item.find('a', {'data-cy': 'listing-item-link'})
+            if not link or not link.get('href'):
+                continue
+                
+            url = link['href']
+            if not url.startswith('http'):
+                url = f"https://www.otodom.pl{url}"
+            
+            # Extract title
+            title = link.get_text(strip=True)
+            
+            # Extract price
+            price_tag = item.find('span', {'data-testid': 'ad-price'})
+            price = price_tag.get_text(strip=True).replace(' ', '').replace('zł', '') if price_tag else None
+            
+            # Extract area and rooms
+            details = {}
+            for detail in item.find_all('span', {'class': 'css-1ntk0hg'}):
+                text = detail.get_text(strip=True)
+                if 'pokoi' in text:
+                    details['rooms'] = text.split()[0]
+                elif 'm²' in text:
+                    details['area'] = text.replace('m²', '').strip()
+            
+            listing_data = {
+                'url': url,
+                'title': title,
+                'price': price,
+                'rooms': details.get('rooms'),
+                'area_m2': details.get('area'),
+                'site_name': self.site_name
+            }
+            listings.append(listing_data)
+            
+        return listings
 
     def fetch_listing_details_page(self, listing_url):
         """
@@ -90,25 +114,46 @@ class OtodomScraper(BaseScraper):
         :return: Dictionary with detailed property info.
                  Should include 'price', 'description', 'image_count', 'title'.
         """
+        from bs4 import BeautifulSoup
         print(f"[{self.site_name}] Parsing listing details page content.")
         if not html_content:
             return {}
-        # TODO: Implement HTML parsing logic for Otodom.pl listing detail page
-        # Example using BeautifulSoup:
-        # from bs4 import BeautifulSoup
-        # soup = BeautifulSoup(html_content, 'html.parser')
-        # details = {}
-        # details['title'] = soup.find('h1', class_='css-1juy7z6 e1j853lh0').text.strip() # Example, actual class will differ
-        # details['price'] = soup.find('strong', attrs={'data-cy': 'price_value'}).text.strip() # Example
-        # description_tag = soup.find('div', attrs={'data-cy': 'adPageAdDescription'})
-        # details['description'] = description_tag.text.strip() if description_tag else 'N/A' # Example
-        # image_tags = soup.find_all('img', class_='image-gallery-image') # Example
-        # details['image_count'] = len(image_tags)
-        #
-        # # Ensure all required fields are present
-        # details.setdefault('title', 'N/A')
-        # details.setdefault('price', 'N/A')
-        # details.setdefault('description', 'N/A')
-        # details.setdefault('image_count', 0)
-        # return details
-        return {}
+
+        soup = BeautifulSoup(html_content, 'html.parser')
+        details = {}
+
+        # Extract title
+        title_tag = soup.find('h1', {'data-cy': 'adPageAdTitle'})
+        details['title'] = title_tag.get_text(strip=True) if title_tag else 'N/A'
+
+        # Extract price
+        price_tag = soup.find('strong', {'data-cy': 'adPageHeaderPrice'})
+        if price_tag:
+            price = price_tag.get_text(strip=True)
+            details['price'] = price.replace(' ', '').replace('zł', '').replace(',', '.')
+
+        # Extract description
+        desc_tag = soup.find('div', {'data-cy': 'adPageAdDescription'})
+        details['description'] = desc_tag.get_text(strip=True) if desc_tag else 'N/A'
+
+        # Extract parameters
+        params = {}
+        for param in soup.find_all('div', {'class': 'css-1qzszy5'}):
+            name = param.find('div', {'class': 'css-1wi2w6s'})
+            value = param.find('div', {'class': 'css-1ytkscc'})
+            if name and value:
+                params[name.get_text(strip=True)] = value.get_text(strip=True)
+
+        # Extract important parameters
+        details['area_m2'] = params.get('Powierzchnia', '').replace('m²', '').strip()
+        details['rooms'] = params.get('Liczba pokoi', '').replace('pokoje', '').strip()
+        details['floor'] = params.get('Piętro', 'N/A')
+
+        # Extract image count
+        images = soup.find_all('img', {'class': 'css-1bmvjcs'})
+        details['image_count'] = len(images)
+
+        # Add site name
+        details['site_name'] = self.site_name
+
+        return details
