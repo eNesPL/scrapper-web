@@ -100,7 +100,7 @@
             {% if listing.first_image_url %}
             <img src="{{ listing.first_image_url }}" style="max-width: 300px; max-height: 200px; margin-bottom: 10px;" alt="Zdjęcie nieruchomości">
             {% endif %}
-            <div class="price">{{ listing.price }}</div>
+            <div class="price">{{ notification_manager._format_price(listing.price) if listing.price else 'N/A' }}</div>
             
             <div class="details-grid">
                 <div class="detail-item">

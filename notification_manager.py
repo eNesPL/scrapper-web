@@ -46,6 +46,9 @@ class NotificationManager:
         if price is None:
             return "N/A"
         try:
+            # First clean any existing formatting
+            if isinstance(price, str):
+                price = price.replace(' ', '').replace(',', '.').replace('zł', '').strip()
             price_float = float(price)
             if price_float.is_integer():
                 return f"{int(price_float):,} zł".replace(",", " ")
