@@ -133,14 +133,25 @@ class OLXScraper(BaseScraper):
                     location = location_parts[0].strip() if len(location_parts) > 0 else ''
                     date = location_parts[1].strip() if len(location_parts) > 1 else ''
                 
-                # Get size
+                # Get size from multiple possible locations
+                size = None
+                # Try primary location
                 size_container = listing_card.find('div', {'color': 'text-global-secondary'})
-                size = None # Zresetuj size dla każdej karty
                 if size_container:
                     size_element = size_container.find('span', class_='css-6as4g5')
                     if size_element:
                         try:
                             size_text = size_element.get_text().split('-')[0].replace('m²', '').strip()
+                            size = float(size_text.replace(',', '.'))
+                        except ValueError:
+                            pass
+                
+                # Try additional location if not found
+                if size is None:
+                    size_element = listing_card.find('p', string=lambda t: t and 'm²' in t)
+                    if size_element:
+                        try:
+                            size_text = size_element.get_text().replace('m²', '').strip()
                             size = float(size_text.replace(',', '.'))
                         except ValueError:
                             pass
@@ -224,9 +235,20 @@ class OLXScraper(BaseScraper):
                 except (ValueError, AttributeError):
                     details['price'] = None
             
-            # Extract description
-            description = soup.find('div', {'data-cy': 'ad_description'})
-            details['description'] = description.get_text().strip() if description else ''
+            # Extract description from multiple locations
+            description = ''
+            # Primary location
+            desc_div = soup.find('div', {'data-cy': 'ad_description'})
+            if desc_div:
+                description = desc_div.get_text().strip()
+            
+            # Additional location
+            if not description:
+                desc_div = soup.find('div', class_='css-1shxysy')
+                if desc_div:
+                    description = desc_div.get_text().strip()
+            
+            details['description'] = description
             
             # Extract photos count
             photos = soup.find('div', {'data-testid': 'swiper-list'})
