@@ -1,2 +1,5 @@
-* * * * * root cd /app && python main.py >> /var/log/cron.log 2>&1
-# @hourly root cd /app && python main.py >> /var/log/cron.log 2>&1
+# Uruchamiaj co godzinę, zapisując logi do pliku
+@hourly root cd /app && python main.py >> /var/log/cron.log 2>&1
+
+# Dodatkowo zapisuj osobny log z datą wykonania
+@hourly root echo "\n=== Rozpoczęcie skanowania $(date) ===" >> /var/log/scraper.log && cd /app && python main.py >> /var/log/scraper.log 2>&1
