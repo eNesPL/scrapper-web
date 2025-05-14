@@ -188,11 +188,13 @@ class sprzedajemyScraper(BaseScraper):
         soup = BeautifulSoup(html_content, 'html.parser')
         details = {}
 
-        # Extract main image safely
+        # Extract main image safely using the specific XPath-like selector
         details['main_image'] = None
-        main_img = soup.select_one('div.image-gallery img')
-        if main_img and main_img.get('src'):
-            details['main_image'] = main_img['src'] if main_img['src'].startswith(('http://', 'https://')) else None
+        main_img = soup.select_one('div.image-gallery div.swiper-slide-active img')
+        if main_img:
+            img_src = main_img.get('src') or main_img.get('data-src')
+            if img_src and img_src.startswith(('http://', 'https://')):
+                details['main_image'] = img_src
 
         # Extract price
         price_span = soup.select_one('section.pricing-box strong span.price')
