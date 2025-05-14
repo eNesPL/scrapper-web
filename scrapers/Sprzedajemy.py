@@ -70,46 +70,59 @@ class sprzedajemyScraper(BaseScraper):
         from bs4 import BeautifulSoup
         print(f"[{self.site_name}] Parsing listings page content.")
         if not html_content:
-            return []
+            return [], False
 
         soup = BeautifulSoup(html_content, 'html.parser')
         listings = []
         
         # Find all listing sections
         for item in soup.find_all('li', class_='offer'):
-            # Extract URL
-            link = item.find('a', class_='offer-title')
-            if not link or not link.get('href'):
-                continue
+            try:
+                # Extract URL
+                link = item.find('a', class_='offer-title')
+                if not link or not link.get('href'):
+                    continue
+                    
+                url = link['href']
+                if not url.startswith('http'):
+                    url = f"https://sprzedajemy.pl{url}"
                 
-            url = link['href']
-            if not url.startswith('http'):
-                url = f"https://sprzedajemy.pl{url}"
-            
-            # Extract title
-            title = link.get_text(strip=True)
-            
-            # Extract price
-            price_tag = item.find('p', class_='offer-price')
-            price = price_tag.get_text(strip=True) if price_tag else None
-            
-            # Extract basic details
-            details = []
-            details_tag = item.find('p', class_='offer-params')
-            if details_tag:
-                details = [d.strip() for d in details_tag.get_text(separator='|').split('|') if d.strip()]
-            
-            listing_data = {
-                'url': url,
-                'title': title,
-                'price': price,
-                'details': details,
-                'site_name': self.site_name
-            }
-            listings.append(listing_data)
+                # Extract title
+                title = link.get_text(strip=True)
+                
+                # Extract price
+                price_tag = item.find('p', class_='offer-price')
+                price = price_tag.get_text(strip=True).replace(' ', '').replace('zł', '') if price_tag else None
+                
+                # Extract basic details
+                details = {}
+                params = item.find('p', class_='offer-params')
+                if params:
+                    parts = params.get_text(separator='|').split('|')
+                    for part in parts:
+                        if ':' in part:
+                            key, val = part.split(':', 1)
+                            details[key.strip()] = val.strip()
+                
+                # Extract additional info
+                location = item.find('a', class_='offer-location').get_text(strip=True) if item.find('a', class_='offer-location') else None
+                date = item.find('span', class_='offer-date').get_text(strip=True) if item.find('span', class_='offer-date') else None
+                
+                listing_data = {
+                    'url': url,
+                    'title': title,
+                    'price': price,
+                    'location': location,
+                    'date': date,
+                    'details': details,
+                    'site_name': self.site_name
+                }
+                listings.append(listing_data)
+            except Exception as e:
+                print(f"[{self.site_name}] Error parsing listing: {e}")
+                continue
             
         # Check if there are more pages by looking for pagination controls
-        soup = BeautifulSoup(html_content, 'html.parser')
         next_page = soup.find('a', class_='next')
         has_next_page = next_page is not None and len(listings) > 0
         
