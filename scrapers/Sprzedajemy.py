@@ -14,6 +14,7 @@ class sprzedajemyScraper(BaseScraper):
         super().__init__(site_name="sprzedajemy.pl",
                          db_manager=db_manager,
                          notification_manager=notification_manager)
+        self.MAX_PAGES = 5  # Maksymalna liczba stron do przeszukania
         # self.base_url = "https://www.sprzedajemy.pl" # Example base URL
 
     def fetch_listings_page(self, search_criteria):
