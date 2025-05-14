@@ -6,6 +6,9 @@ class NotificationManager:
     def __init__(self, webhook_url):
         self.webhook_url = webhook_url
         self.ignore_identical_values = False
+        self.last_notification_time = None
+        self.notification_queue = []
+        self.MIN_NOTIFICATION_INTERVAL = 1.0  # Minimalny odstęp między powiadomieniami w sekundach
         if not self.webhook_url:
             print("Discord webhook URL not provided. Notifications will be disabled.")
         elif not self.webhook_url.startswith("https://discord.com/api/webhooks/"):
@@ -14,17 +17,38 @@ class NotificationManager:
 
     def send_notification(self, message_content=None, embed=None):
         if not self.webhook_url:
-            # print(f"Notification (disabled): {message_content or embed}")
             return
 
+        # Dodaj powiadomienie do kolejki
+        self.notification_queue.append({
+            'message_content': message_content,
+            'embed': embed,
+            'timestamp': datetime.datetime.now()
+        })
+        self._process_queue()
+
+    def _process_queue(self):
+        """Przetwarza kolejkę powiadomień z uwzględnieniem limitów Discord"""
+        if not self.notification_queue:
+            return
+
+        current_time = datetime.datetime.now()
+        
+        # Sprawdź czy minął wymagany odstęp czasowy
+        if self.last_notification_time and \
+           (current_time - self.last_notification_time).total_seconds() < self.MIN_NOTIFICATION_INTERVAL:
+            return
+
+        # Pobierz najstarsze powiadomienie z kolejki
+        notification = self.notification_queue.pop(0)
+        
         payload = {}
-        if message_content:
-            payload['content'] = message_content
-        if embed:
-            payload['embeds'] = [embed] if not isinstance(embed, list) else embed
+        if notification['message_content']:
+            payload['content'] = notification['message_content']
+        if notification['embed']:
+            payload['embeds'] = [notification['embed']] if not isinstance(notification['embed'], list) else notification['embed']
         
         if not payload:
-            print("Notification attempted with no content or embed.")
             return
 
         headers = {'Content-Type': 'application/json'}
@@ -32,15 +56,16 @@ class NotificationManager:
         try:
             print("wylaczone powiadomienia")
             #response = requests.post(self.webhook_url, data=json.dumps(payload), headers=headers, timeout=10)
-            #response.raise_for_status() # Raise an exception for HTTP errors (4xx or 5xx)
-            # print(f"Discord notification sent successfully. Message: {message_content or 'Embed used'}")
+            #response.raise_for_status()
+            self.last_notification_time = current_time
+            print(f"Discord notification sent successfully. Queue size: {len(self.notification_queue)}")
         except requests.RequestException as e:
             print(f"Error sending Discord notification: {e}")
+            # W przypadku błędu, wstaw powiadomienie z powrotem do kolejki
+            self.notification_queue.insert(0, notification)
             if hasattr(e, 'response') and e.response is not None:
                 print(f"Response status: {e.response.status_code}")
                 print(f"Response text: {e.response.text}")
-        except Exception as e:
-            print(f"An unexpected error occurred while sending Discord notification: {e}")
 
     def _format_price(self, price):
         """Format price in standard way: with thousand separators and zł suffix"""
