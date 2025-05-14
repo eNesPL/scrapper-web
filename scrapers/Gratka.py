@@ -292,42 +292,79 @@ class GratkaScraper(BaseScraper):
         
         # Image count and first image
         details['images'] = []
-        img_selectors = [
-            'div[data-cy="gallery"] img',  # Nowy główny selektor dla galerii
-            'div.galleryDesktop__container img',
-            'div.galleryViewer img',
-            'div.listingGallery img',
-            'img.offer-photo',
-            'img[itemprop="image"]',
-            'img[data-src*="gratka"]',
-            'img[src*="gratka"]'
-        ]
         
-        for selector in img_selectors:
-            try:
-                imgs = soup.select(selector)
-                for img in imgs:
-                    img_url = img.get('data-src') or img.get('src')
+        # 1. Próba znalezienia obrazów w głównej galerii
+        gallery_div = soup.find('div', class_='wM-EsW')
+        if gallery_div:
+            # Znajdź wszystkie przyciski z obrazami
+            buttons = gallery_div.find_all('button', class_='_9RlKWz')
+            for button in buttons:
+                # Sprawdź czy zawiera obrazek
+                img = button.find('img')
+                if img:
+                    img_url = img.get('src')
                     if img_url and not any(x in img_url.lower() for x in ['placeholder', 'default', 'logo']):
                         if img_url.startswith('//'):
                             img_url = f"https:{img_url}"
                         elif not img_url.startswith('http'):
                             img_url = f"{self.base_url}{img_url if img_url.startswith('/') else '/' + img_url}"
-                        if img_url not in details['images'] and 'gratka' in img_url.lower():
+                        if img_url not in details['images']:
                             details['images'].append(img_url)
-            except Exception as e:
-                print(f"[{self.site_name}] Error processing selector {selector}: {e}")
-                continue
+                else:
+                    # Sprawdź czy obraz jest jako background-image
+                    div = button.find('div', class_='z0fIDX')
+                    if div and div.get('style'):
+                        match = re.search(r"url\(['\"]?(.*?)['\"]?\)", div['style'])
+                        if match:
+                            img_url = match.group(1)
+                            if img_url.startswith('//'):
+                                img_url = f"https:{img_url}"
+                            elif not img_url.startswith('http'):
+                                img_url = f"{self.base_url}{img_url if img_url.startswith('/') else '/' + img_url}"
+                            if img_url not in details['images']:
+                                details['images'].append(img_url)
         
-        # Dodatkowe próby znalezienia obrazów
+        # 2. Pobierz liczbę zdjęć z licznika
+        counter_div = soup.find('div', class_='h0RlPM')
+        if counter_div:
+            counter = counter_div.find('span', class_='_3q958X')
+            if counter:
+                try:
+                    details['image_count'] = int(counter.get_text(strip=True))
+                except ValueError:
+                    pass
+        
+        # 3. Jeśli nie znaleziono obrazów, użyj standardowych selektorów jako fallback
         if not details['images']:
-            gallery_div = soup.find('div', {'data-cy': 'gallery'})
-            if gallery_div:
-                img_tags = gallery_div.find_all('img')
-                for img in img_tags:
-                    img_url = img.get('data-src') or img.get('src')
-                    if img_url and 'gratka' in img_url.lower():
-                        details['images'].append(img_url)
+            img_selectors = [
+                'div[data-cy="gallery"] img',
+                'div.galleryDesktop__container img',
+                'img.offer-photo',
+                'img[itemprop="image"]'
+            ]
+            for selector in img_selectors:
+                try:
+                    imgs = soup.select(selector)
+                    for img in imgs:
+                        img_url = img.get('data-src') or img.get('src')
+                        if img_url and not any(x in img_url.lower() for x in ['placeholder', 'default', 'logo']):
+                            if img_url.startswith('//'):
+                                img_url = f"https:{img_url}"
+                            elif not img_url.startswith('http'):
+                                img_url = f"{self.base_url}{img_url if img_url.startswith('/') else '/' + img_url}"
+                            if img_url not in details['images']:
+                                details['images'].append(img_url)
+                except Exception as e:
+                    print(f"[{self.site_name}] Error processing selector {selector}: {e}")
+                    continue
+        
+        # Ustaw liczbę zdjęć jeśli nie została znaleziona w liczniku
+        if 'image_count' not in details or details['image_count'] == 0:
+            details['image_count'] = len(details['images'])
+        
+        # Ustaw pierwsze zdjęcie jeśli znaleziono jakieś obrazy
+        if details['images']:
+            details['first_image_url'] = details['images'][0]
         
         if details['images']:
             details['image_count'] = len(details['images'])
