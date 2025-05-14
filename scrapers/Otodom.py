@@ -58,7 +58,7 @@ class OtodomScraper(BaseScraper):
         soup = BeautifulSoup(html_content, 'html.parser')
         listings = []
         
-        for item in soup.find_all('div', {'data-cy': 'listing-item'}):
+        for item in soup.find_all('article', {'data-cy': 'listing-item'}):
             # Extract URL
             link = item.find('a', {'data-cy': 'listing-item-link'})
             if not link or not link.get('href'):
@@ -72,24 +72,25 @@ class OtodomScraper(BaseScraper):
             title = link.get_text(strip=True)
             
             # Extract price
-            price_tag = item.find('span', {'data-testid': 'ad-price'})
+            price_tag = item.find('span', {'class': 'css-2bt9f1'})
             price = price_tag.get_text(strip=True).replace(' ', '').replace('zł', '').replace(',', '.') if price_tag else None
             
             # Extract area, rooms and other details
             details = {}
-            details_div = item.find('div', {'class': 'css-1iexl2e'})  # Main details container
-            if details_div:
-                for detail in details_div.find_all('span', {'class': 'css-1ntk0hg'}):
-                    text = detail.get_text(strip=True)
-                    if 'pokoi' in text:
-                        details['rooms'] = text.split()[0]
-                    elif 'm²' in text:
-                        details['area'] = text.replace('m²', '').strip()
-                    elif 'Piętro' in text:
-                        details['floor'] = text.replace('Piętro:', '').strip()
+            specs_list = item.find('dl', {'class': 'css-9q2yy4'})
+            if specs_list:
+                for dt, dd in zip(specs_list.find_all('dt'), specs_list.find_all('dd')):
+                    key = dt.get_text(strip=True)
+                    value = dd.get_text(strip=True)
+                    if key == 'Liczba pokoi':
+                        details['rooms'] = value.split()[0]
+                    elif key == 'Powierzchnia':
+                        details['area'] = value.replace('m²', '').strip()
+                    elif key == 'Piętro':
+                        details['floor'] = value
             
             # Extract location
-            location = item.find('p', {'class': 'css-1nhy6h4'})
+            location = item.find('p', {'class': 'css-42r2ms'})
             
             listing_data = {
                 'url': url,
@@ -98,6 +99,7 @@ class OtodomScraper(BaseScraper):
                 'rooms': details.get('rooms'),
                 'area_m2': details.get('area'),
                 'floor': details.get('floor'),
+                'price_per_m2': details.get('price_per_m2'),
                 'location': location.get_text(strip=True) if location else None,
                 'site_name': self.site_name
             }
