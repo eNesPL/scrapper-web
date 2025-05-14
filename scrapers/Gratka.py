@@ -45,7 +45,9 @@ class GratkaScraper(BaseScraper):
         """
         Parses the listings page HTML to extract individual listing URLs or summary data.
         :param html_content: str, HTML content of the listings page.
-        :return: List of dictionaries, each with at least a 'url', 'title', and 'price'.
+        :return: Tuple of (listings_summaries, has_next_page) where:
+                 - listings_summaries: List of dicts with at least 'url', 'title', 'price'
+                 - has_next_page: bool, True if there are more pages to scrape
         """
         print(f"[{self.site_name}] Parsing listings page content.")
         if not html_content:
@@ -117,7 +119,12 @@ class GratkaScraper(BaseScraper):
                 listings.append(summary)
                 print(f"[{self.site_name}] Parsed summary: Title: {summary.get('title', 'N/A')[:30]}..., Price: {summary.get('price', 'N/A')}, URL: {summary.get('url')}")
 
-        return listings
+        # Simple check for next page - look for pagination next button
+        soup = BeautifulSoup(html_content, 'html.parser')
+        next_button = soup.find('a', class_='pagination__next')
+        has_next_page = next_button is not None and 'disabled' not in next_button.get('class', [])
+        
+        return listings, has_next_page
 
     def fetch_listing_details_page(self, listing_url):
         """
