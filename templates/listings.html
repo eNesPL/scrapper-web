@@ -2,16 +2,24 @@
 <html>
 <head>
     <title>Real Estate Listings</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
-        body { font-family: Arial, sans-serif; margin: 20px; }
+        body { 
+            font-family: Arial, sans-serif; 
+            margin: 10px;
+            max-width: 100%;
+            overflow-x: hidden;
+        }
         .listing {
             border: 1px solid #e0e0e0;
-            padding: 20px;
-            margin-bottom: 25px;
+            padding: 15px;
+            margin-bottom: 20px;
             border-radius: 8px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
             background: #fff;
             transition: transform 0.2s;
+            width: 100%;
+            box-sizing: border-box;
         }
         .listing:hover {
             transform: translateY(-2px);
@@ -20,24 +28,31 @@
         .listing h2 { 
             margin-top: 0;
             color: #2c3e50;
-            font-size: 1.4em;
-            margin-bottom: 15px;
+            font-size: 1.2em;
+            margin-bottom: 10px;
+            word-wrap: break-word;
         }
         .price {
             color: #c1403d;
             font-weight: 700;
-            font-size: 1.5em;
+            font-size: 1.3em;
             margin-bottom: 10px;
-            padding: 10px;
+            padding: 8px;
             background: #fff5f5;
             border-radius: 4px;
             display: inline-block;
+            word-break: break-word;
         }
         .details-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 15px;
-            margin: 15px 0;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 10px;
+            margin: 10px 0;
+        }
+        @media (max-width: 600px) {
+            .details-grid {
+                grid-template-columns: 1fr;
+            }
         }
         .detail-item {
             padding: 10px;
@@ -55,31 +70,58 @@
             color: #2c3e50;
         }
         .description {
-            margin: 15px 0;
-            line-height: 1.6;
+            margin: 10px 0;
+            line-height: 1.5;
             color: #34495e;
-            white-space: pre-line; /* This will preserve newlines from the description text */
+            white-space: pre-line;
+            word-wrap: break-word;
+            overflow-wrap: break-word;
         }
         .description ul {
-            padding-left: 20px;
+            padding-left: 15px;
             list-style-type: square;
         }
         .last-updated {
-            font-size: 0.85em;
+            font-size: 0.8em;
             color: #95a5a6;
-            margin-top: 15px;
+            margin-top: 10px;
             border-top: 1px solid #eee;
-            padding-top: 10px;
+            padding-top: 8px;
         }
         img {
             max-width: 100%;
             height: auto;
             border-radius: 4px;
-            margin-bottom: 15px;
+            margin-bottom: 10px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }
-        a { color: #0066cc; text-decoration: none; }
-        a:hover { text-decoration: underline; }
+        .sort-options {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 5px;
+            margin-bottom: 15px;
+        }
+        .sort-options a {
+            display: inline-block;
+            padding: 5px 8px;
+            font-size: 0.9em;
+        }
+        a { 
+            color: #0066cc; 
+            text-decoration: none; 
+        }
+        a:hover { 
+            text-decoration: underline; 
+        }
+        @media (max-width: 480px) {
+            .listing {
+                padding: 10px;
+            }
+            .price {
+                font-size: 1.1em;
+                padding: 5px 8px;
+            }
+        }
     </style>
 </head>
 <body>
