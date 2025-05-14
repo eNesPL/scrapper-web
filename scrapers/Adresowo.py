@@ -174,6 +174,10 @@ class AdresowoScraper(BaseScraper):
                                 first_image_url = self.base_url + first_image_url
                             else:
                                 first_image_url = self.base_url + '/' + first_image_url
+                        # Skip placeholder images
+                        if 'placeholder' in first_image_url.lower():
+                            first_image_url = None
+                            continue
                         break
 
             listing_data = {
