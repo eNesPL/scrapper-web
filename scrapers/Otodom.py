@@ -325,14 +325,17 @@ class OtodomScraper(BaseScraper):
         for img in image_tags:
             src = img.get('src') or img.get('data-src')
             if (src and src.startswith(('http://', 'https://')) 
-                and not any(logo_word in src.lower() for logo_word in ['logo', 'agent', 'biuro', 'deweloper'])
+                and not any(logo_word in src.lower() for logo_word in ['logo', 'agent', 'biuro', 'deweloper', 'remax', 'metrohouse'])
                 and 'user' not in src.lower()
-                and not src.endswith(('.svg', '.png'))):  # Ignore small logo files
+                and not src.endswith(('.svg', '.png'))
+                and not any(x in src.lower() for x in ['/logos/', '/brands/', '/agents/'])):  # Ignore logo files
                 # Clean up image URL - remove size parameters
                 clean_src = src.split('?')[0].split(';')[0]
-                # Additional check for small images (likely logos)
+                # Additional checks for small images and company logos
                 if not ('50x50' in src or '100x100' in src or '150x150' in src):
-                    details['images'].append(clean_src)
+                    # Skip if URL contains typical logo paths
+                    if not any(x in clean_src.lower() for x in ['/logo/', '/brand/', '/agent/']):
+                        details['images'].append(clean_src)
         
         details['image_count'] = len(details['images'])
         
