@@ -189,7 +189,7 @@ class OtodomScraper(BaseScraper):
         # Extract parameters from multiple possible sections
         params = {}
         
-        # Main parameters section
+        # Main parameters section - new structure
         params_section = soup.find('div', {'data-testid': 'ad.top-information.table'})
         if params_section:
             for row in params_section.find_all('div', {'data-testid': 'table-row'}):
@@ -199,6 +199,15 @@ class OtodomScraper(BaseScraper):
                     value = cells[1].get_text(strip=True)
                     if name and value:
                         params[name] = value
+
+        # Alternative parameters section - item grid
+        item_grid = soup.find('div', {'class': 'css-1xw0jqp'})
+        if item_grid:
+            for item in item_grid.find_all('div', {'class': 'css-1airkmu'}):
+                if 'Powierzchnia' in item.get_text():
+                    area_value = item.find_next('div', {'class': 'css-1airkmu'})
+                    if area_value:
+                        params['Powierzchnia'] = area_value.get_text(strip=True).replace('m²', '').replace(' ', '')
 
         # Additional parameters from description
         description = soup.find('div', {'data-cy': 'adPageAdDescription'})
