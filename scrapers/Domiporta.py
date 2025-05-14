@@ -48,7 +48,9 @@ class DomiportaScraper(BaseScraper):
         """
         Parses the listings page HTML to extract individual listing URLs or summary data.
         :param html_content: str, HTML content of the listings page.
-        :return: List of dictionaries, each with at least a 'url'.
+        :return: Tuple of (listings, has_next_page) where:
+                 - listings: List of dictionaries, each with at least a 'url'
+                 - has_next_page: bool, whether there are more pages to scrape
         """
         print(f"[{self.site_name}] Parsing listings page content.")
         if not html_content:
@@ -103,7 +105,11 @@ class DomiportaScraper(BaseScraper):
             })
 
         print(f"[{self.site_name}] Parsed {len(listings)} listings")
-        return listings
+        # Check for next page button
+        next_page = soup.find('a', class_='next')
+        has_next_page = next_page is not None and len(listings) > 0
+        
+        return listings, has_next_page
 
     def fetch_listing_details_page(self, listing_url):
         """
@@ -111,6 +117,22 @@ class DomiportaScraper(BaseScraper):
         :param listing_url: str, URL of the individual listing.
         :return: HTML content (str) or None.
         """
+        print(f"[{self.site_name}] Fetching details for URL: {listing_url}")
+        try:
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+                'Accept-Language': 'pl-PL,pl;q=0.9',
+                'Referer': 'https://www.domiporta.pl/'
+            }
+            response = requests.get(listing_url, headers=headers, timeout=15)
+            response.raise_for_status()
+            
+            # Check if we got a valid HTML response
+            if 'text/html' not in response.headers.get('Content-Type', ''):
+                print(f"[{self.site_name}] Invalid content type for {listing_url}")
+                return None
+                
+            return response.text
         print(f"[{self.site_name}] Fetching details for URL: {listing_url}")
         try:
             headers = {
