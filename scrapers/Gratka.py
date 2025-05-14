@@ -7,7 +7,6 @@ except ImportError:
     lxml_html = None
 
 from .base_scraper import BaseScraper
-# import datetime # If you need to use datetime objects
 
 class GratkaScraper(BaseScraper):
     """
@@ -28,16 +27,13 @@ class GratkaScraper(BaseScraper):
         :param page: int, page number to fetch (default: 1)
         :return: HTML content (str) or None.
         """
-        # Example URL provided by user, in a real scenario, build this from search_criteria
-        # For now, we'll use the provided static URL for Gliwice.
-        # We can enhance this later to use search_criteria if needed.
         example_url = f"https://gratka.pl/nieruchomosci/mieszkania/3-pokojowe/gliwice?cena-calkowita:max=300000&location%5Bmap%5D=1&location%5Bmap_bounds%5D=50.3752324,18.7546442:50.2272469,18.5445885&ogloszenie-zawiera%5B0%5D=zdjecie&ogloszenie-zawiera%5B1%5D=cena&powierzchnia-w-m2:min=25&sort=relevance&page={page}"
-        
+
         print(f"[{self.site_name}] Fetching listings page {page} using URL: {example_url} (Criteria: {search_criteria})")
-        
+
         try:
             response = requests.get(example_url, timeout=10)
-            response.raise_for_status()  # Raise an exception for HTTP errors
+            response.raise_for_status()
             return response.text
         except requests.exceptions.RequestException as e:
             print(f"[{self.site_name}] Error fetching listings page {example_url}: {e}")
@@ -47,27 +43,20 @@ class GratkaScraper(BaseScraper):
         """
         Parses the listings page HTML to extract individual listing URLs or summary data.
         :param html_content: str, HTML content of the listings page.
-        :return: Tuple of (listings_summaries, has_next_page) where:
-                 - listings_summaries: List of dicts with at least 'url', 'title', 'price'
-                 - has_next_page: bool, True if there are more pages to scrape
+        :return: Tuple of (listings_summaries, has_next_page)
         """
         print(f"[{self.site_name}] Parsing listings page content.")
         if not html_content:
-            return []
-        
+            return [], False
+
         soup = BeautifulSoup(html_content, 'html.parser')
         listings = []
-        
-        # Try finding listings by class 'card' first
+
         listing_elements = soup.find_all(class_='card')
-        
         if not listing_elements:
-            # Fallback to <article class="teaserUnified">
             print(f"[{self.site_name}] No elements with class 'card' found. Trying 'article.teaserUnified'.")
             listing_elements = soup.find_all('article', class_='teaserUnified')
-        
         if not listing_elements:
-            # Fallback to data-testid="listing-item"
             print(f"[{self.site_name}] No elements with 'article.teaserUnified' found. Trying 'data-testid=listing-item'.")
             listing_elements = soup.find_all(attrs={"data-testid": "listing-item"})
 
@@ -75,12 +64,9 @@ class GratkaScraper(BaseScraper):
 
         for item_element in listing_elements:
             summary = {}
-            
-            # URL and Title
-            # Title is often in <a class="teaserUnified__anchor" href="..."> or similar
             link_tag = item_element.find('a', class_='teaserUnified__anchor')
-            if not link_tag: # Fallback for data-testid items
-                link_tag = item_element.find('a', href=True) 
+            if not link_tag:
+                link_tag = item_element.find('a', href=True)
 
             if link_tag and link_tag.get('href'):
                 url = link_tag['href']
@@ -88,26 +74,19 @@ class GratkaScraper(BaseScraper):
                     summary['url'] = f"{self.base_url}{url if url.startswith('/') else '/' + url}"
                 else:
                     summary['url'] = url
-                
-                # Try to get title from a specific element or the link text itself
-                title_tag = link_tag.find('h2', class_='teaserUnified__title') # Common pattern
+
+                title_tag = link_tag.find('h2', class_='teaserUnified__title')
                 if title_tag:
                     summary['title'] = title_tag.get_text(strip=True)
-                elif link_tag.get_text(strip=True): # Fallback to link's text
-                     summary['title'] = link_tag.get_text(strip=True)
-                else: # Try another common title pattern
+                elif link_tag.get_text(strip=True):
+                    summary['title'] = link_tag.get_text(strip=True)
+                else:
                     title_span = link_tag.find('span', class_='teaserHeading__mainText')
-                    if title_span:
-                        summary['title'] = title_span.get_text(strip=True)
-                    else:
-                        summary['title'] = 'N/A'
+                    summary['title'] = title_span.get_text(strip=True) if title_span else 'N/A'
             else:
                 print(f"[{self.site_name}] Skipping item, no URL found.")
                 continue
 
-            # Price
-            # Price is often in <p class="priceInfo__value"> or similar structure
-            # Try multiple price element patterns
             price_elements = [
                 item_element.find('p', class_='priceInfo__value'),
                 item_element.find('span', attrs={"data-testid": "price"}),
@@ -115,7 +94,6 @@ class GratkaScraper(BaseScraper):
                 item_element.find('span', class_='price'),
                 item_element.find('span', class_='value')
             ]
-            
             for price_element in price_elements:
                 if price_element:
                     price_text = price_element.get_text(strip=True)
@@ -124,16 +102,12 @@ class GratkaScraper(BaseScraper):
                         break
             else:
                 summary['price'] = 'N/A'
-            
-            if summary.get('url'): # Ensure we have a URL before adding
-                listings.append(summary)
-                print(f"[{self.site_name}] Parsed summary: Title: {summary.get('title', 'N/A')[:30]}..., Price: {summary.get('price', 'N/A')}, URL: {summary.get('url')}")
 
-        # Simple check for next page - look for pagination next button
-        soup = BeautifulSoup(html_content, 'html.parser')
+            listings.append(summary)
+            print(f"[{self.site_name}] Parsed summary: {summary}")
+
         next_button = soup.find('a', class_='pagination__next')
-        has_next_page = next_button is not None and 'disabled' not in next_button.get('class', [])
-        
+        has_next_page = bool(next_button and 'disabled' not in next_button.get('class', []))
         return listings, has_next_page
 
     def fetch_listing_details_page(self, listing_url):
@@ -145,7 +119,7 @@ class GratkaScraper(BaseScraper):
         print(f"[{self.site_name}] Fetching details for URL: {listing_url}")
         try:
             response = requests.get(listing_url, timeout=10)
-            response.raise_for_status()  # Raise an exception for HTTP errors
+            response.raise_for_status()
             return response.text
         except requests.exceptions.RequestException as e:
             print(f"[{self.site_name}] Error fetching details page {listing_url}: {e}")
@@ -161,283 +135,104 @@ class GratkaScraper(BaseScraper):
         if not html_content:
             return {}
 
+        # Inicjalizacja wyników
         details = {
             'title': 'N/A',
             'price': 'N/A',
             'area_m2': 'N/A',
             'description': 'N/A',
+            'images': [],
             'image_count': 0,
             'first_image_url': None
         }
-        
+
         soup = BeautifulSoup(html_content, 'html.parser')
+        parameters_section = soup.find('div', class_='parameters__items')  # aby uniknąć późniejszych błędów
+
+        # Parsowanie przez lxml (jeśli dostępne)
         lxml_tree = None
         if lxml_html:
             try:
                 lxml_tree = lxml_html.fromstring(html_content)
             except Exception as e:
                 print(f"[{self.site_name}] Error parsing HTML with lxml: {e}")
-                lxml_tree = None # Ensure it's None if parsing fails
 
-        # --- Extract data using XPath if lxml_tree is available ---
         if lxml_tree is not None:
             try:
-                # Price
-                price_elements = lxml_tree.xpath('/html/body/div[1]/div[2]/main/div[1]/div[4]/section/div/div[1]/div/span[1]')
-                if price_elements:
-                    details['price'] = price_elements[0].text_content().strip()
+                price_el = lxml_tree.xpath('//span[contains(@class,"price")]')
+                if price_el:
+                    details['price'] = price_el[0].text_content().strip()
                     print(f"[{self.site_name}] Price (XPath): {details['price']}")
             except Exception as e:
                 print(f"[{self.site_name}] Error extracting price with XPath: {e}")
 
             try:
-                # Area
-                area_elements = lxml_tree.xpath('/html/body/div[1]/div[2]/main/div[1]/div[4]/section/div/div[2]/span[2]/span')
-                if area_elements:
-                    details['area_m2'] = area_elements[0].text_content().strip()
+                area_el = lxml_tree.xpath('//span[contains(text(),"m²")]')
+                if area_el:
+                    details['area_m2'] = area_el[0].text_content().strip()
                     print(f"[{self.site_name}] Area (XPath): {details['area_m2']}")
             except Exception as e:
                 print(f"[{self.site_name}] Error extracting area with XPath: {e}")
 
-            floor_info_for_description = None
-            try:
-                # Floor (for description)
-                floor_elements = lxml_tree.xpath('/html/body/div[1]/div[2]/main/div[1]/div[4]/section/div/div[2]/span[3]/span')
-                if floor_elements:
-                    floor_info_for_description = floor_elements[0].text_content().strip()
-                    print(f"[{self.site_name}] Floor info (XPath): {floor_info_for_description}")
-            except Exception as e:
-                print(f"[{self.site_name}] Error extracting floor with XPath: {e}")
-
-            # First image URL using XPath to the button
-            try:
-                # XPath points to a button, image might be inside or as background
-                button_elements = lxml_tree.xpath('/html/body/div[1]/div[2]/main/div[1]/div[3]/div[1]/button[1]')
-                if button_elements:
-                    button_element = button_elements[0]
-                    # Try to find an <img> tag inside the button
-                    img_tag_in_button = button_element.find('.//img') # .// searches descendants
-                    if img_tag_in_button is not None and img_tag_in_button.get('src'):
-                        details['first_image_url'] = img_tag_in_button.get('src')
-                        print(f"[{self.site_name}] First image URL (XPath - img in button): {details['first_image_url']}")
-                    else:
-                        # Try to get from style attribute if it's a background image
-                        style_attr = button_element.get('style')
-                        if style_attr and 'background-image' in style_attr:
-                            import re
-                            match = re.search(r"url\(['\"]?(.*?)['\"]?\)", style_attr)
-                            if match:
-                                details['first_image_url'] = match.group(1)
-                                print(f"[{self.site_name}] First image URL (XPath - button style): {details['first_image_url']}")
-                if details.get('first_image_url') and details['first_image_url'].startswith('//'):
-                    details['first_image_url'] = f"https:{details['first_image_url']}"
-                elif details.get('first_image_url') and not details['first_image_url'].startswith('http'):
-                     details['first_image_url'] = f"{self.base_url}{details['first_image_url'] if details['first_image_url'].startswith('/') else '/' + details['first_image_url']}"
-
-            except Exception as e:
-                print(f"[{self.site_name}] Error extracting first image with XPath: {e}")
+        # Tytuł
+        h1 = soup.find('h1')
+        if h1:
+            details['title'] = h1.get_text(strip=True)
         else:
-            print(f"[{self.site_name}] lxml not available or HTML parsing failed, skipping XPath extractions.")
+            title_tag = soup.find('title')
+            if title_tag:
+                details['title'] = title_tag.get_text(strip=True)
+        print(f"[{self.site_name}] Title: {details['title']}")
 
-        # --- Extract data using BeautifulSoup ---
-        
-        # Title (using a common h1 tag or title tag)
-        title_tag_h1 = soup.find('h1')
-        if title_tag_h1:
-            details['title'] = title_tag_h1.get_text(strip=True)
-        else:
-            title_tag_head = soup.find('title')
-            if title_tag_head:
-                details['title'] = title_tag_head.get_text(strip=True)
-        print(f"[{self.site_name}] Title (BeautifulSoup): {details['title']}")
+        # Opis
+        desc_el = soup.find(attrs={"itemprop": "description"}) or soup.find('div', class_='description__text')
+        if desc_el:
+            details['description'] = desc_el.get_text(separator="\n", strip=True)
 
-        # Description parts
-        description_parts = []
-        
-        # Main description (e.g., from itemprop or a common class)
-        main_desc_element = soup.find(attrs={"itemprop": "description"})
-        if not main_desc_element: # Fallback to a common class if itemprop not found
-            main_desc_element = soup.find('div', class_='description__text') # Example class
-        if main_desc_element:
-            main_desc_text = main_desc_element.get_text(separator="\n", strip=True)
-            if main_desc_text:
-                description_parts.append(main_desc_text)
-                print(f"[{self.site_name}] Main description found (BeautifulSoup). Length: {len(main_desc_text)}")
-
-        # Add floor info to description if found
-        if floor_info_for_description:
-            description_parts.append(f"Piętro: {floor_info_for_description}")
-
-        # Features from <ul data-v-0e98df09="" class="Akny2O">
-        features_ul = soup.find('ul', class_='Akny2O', attrs={'data-v-0e98df09': True})
-        if not features_ul: # Fallback if data-v attribute is not exactly matched or not present
-             features_ul = soup.find('ul', class_='Akny2O')
-
+        # Cechy dodatkowe
+        features_ul = soup.find('ul', class_='Akny2O')
         if features_ul:
-            feature_items = []
-            for li_tag in features_ul.find_all('li', class_='_9-I1E2', attrs={'data-cy': 'tagItem'}):
-                feature_text = li_tag.get_text(strip=True)
-                if feature_text:
-                    feature_items.append(feature_text)
-            if feature_items:
-                description_parts.append("Dodatkowe cechy:\n- " + "\n- ".join(feature_items))
-                print(f"[{self.site_name}] Found features (ul.Akny2O): {', '.join(feature_items)}")
-        else:
-            print(f"[{self.site_name}] Features list (ul.Akny2O) not found.")
-            
-        # Combine description parts
-        if description_parts:
-            full_description = "\n\n".join(filter(None, description_parts))
-            details['description'] = full_description[:1000] + '...' if len(full_description) > 1000 else full_description
-        
-        # Image count and first image
-        details['images'] = []
-        
-        # 1. Próba znalezienia obrazów w głównej galerii
+            items = [li.get_text(strip=True) for li in features_ul.find_all('li', attrs={'data-cy': 'tagItem'})]
+            if items:
+                details['description'] += "\n\nDodatkowe cechy:\n- " + "\n- ".join(items)
+
+        # Galeria zdjęć
         gallery_div = soup.find('div', class_='wM-EsW')
         if gallery_div:
-            # Znajdź wszystkie przyciski z obrazami
-            buttons = gallery_div.find_all('button', class_='_9RlKWz')
-            for button in buttons:
-                # Sprawdź czy zawiera obrazek
-                img = button.find('img')
-                if img:
-                    img_url = img.get('src')
-                    if img_url and not any(x in img_url.lower() for x in ['placeholder', 'default', 'logo']):
-                        if img_url.startswith('//'):
-                            img_url = f"https:{img_url}"
-                        elif not img_url.startswith('http'):
-                            img_url = f"{self.base_url}{img_url if img_url.startswith('/') else '/' + img_url}"
-                        if img_url not in details['images']:
-                            details['images'].append(img_url)
+            for btn in gallery_div.find_all('button', class_='_9RlKWz'):
+                img = btn.find('img')
+                if img and img.get('src'):
+                    url = img['src']
                 else:
-                    # Sprawdź czy obraz jest jako background-image
-                    div = button.find('div', class_='z0fIDX')
-                    if div and div.get('style'):
-                        match = re.search(r"url\(['\"]?(.*?)['\"]?\)", div['style'])
-                        if match:
-                            img_url = match.group(1)
-                            if img_url.startswith('//'):
-                                img_url = f"https:{img_url}"
-                            elif not img_url.startswith('http'):
-                                img_url = f"{self.base_url}{img_url if img_url.startswith('/') else '/' + img_url}"
-                            if img_url not in details['images']:
-                                details['images'].append(img_url)
-        
-        # 2. Pobierz liczbę zdjęć z licznika
-        counter_div = soup.find('div', class_='h0RlPM')
-        if counter_div:
-            counter = counter_div.find('span', class_='_3q958X')
-            if counter:
-                try:
-                    details['image_count'] = int(counter.get_text(strip=True))
-                except ValueError:
-                    pass
-        
-        # 3. Jeśli nie znaleziono obrazów, użyj standardowych selektorów jako fallback
-        if not details['images']:
-            img_selectors = [
-                'div[data-cy="gallery"] img',
-                'div.galleryDesktop__container img',
-                'img.offer-photo',
-                'img[itemprop="image"]'
-            ]
-            for selector in img_selectors:
-                try:
-                    imgs = soup.select(selector)
-                    for img in imgs:
-                        img_url = img.get('data-src') or img.get('src')
-                        if img_url and not any(x in img_url.lower() for x in ['placeholder', 'default', 'logo']):
-                            if img_url.startswith('//'):
-                                img_url = f"https:{img_url}"
-                            elif not img_url.startswith('http'):
-                                img_url = f"{self.base_url}{img_url if img_url.startswith('/') else '/' + img_url}"
-                            if img_url not in details['images']:
-                                details['images'].append(img_url)
-                except Exception as e:
-                    print(f"[{self.site_name}] Error processing selector {selector}: {e}")
-                    continue
-        
-        # Ustaw liczbę zdjęć jeśli nie została znaleziona w liczniku
-        if 'image_count' not in details or details['image_count'] == 0:
-            details['image_count'] = len(details['images'])
-        
-        # Ustaw pierwsze zdjęcie jeśli znaleziono jakieś obrazy
+                    # fallback do background-image
+                    style = btn.get('style', '')
+                    m = re.search(r"url\(['\"]?(.*?)['\"]?\)", style)
+                    url = m.group(1) if m else None
+                if url:
+                    if url.startswith('//'):
+                        url = f"https:{url}"
+                    elif not url.startswith('http'):
+                        url = f"{self.base_url}{url}"
+                    if url not in details['images']:
+                        details['images'].append(url)
+
+        # Liczba i pierwsze zdjęcie
+        details['image_count'] = len(details['images'])
         if details['images']:
             details['first_image_url'] = details['images'][0]
-        
-        if details['images']:
-            details['image_count'] = len(details['images'])
-            details['first_image_url'] = details['images'][0]
-            print(f"[{self.site_name}] Found {details['image_count']} images: {details['first_image_url']}")
-        else:
-            details['image_count'] = 0
-            details['first_image_url'] = None
-            print(f"[{self.site_name}] No images found")
-        
-        print(f"[{self.site_name}] First image URL (BeautifulSoup): {details['first_image_url']}")
+        print(f"[{self.site_name}] Images found: {details['image_count']}")
 
-
-        # --- Attempt to extract Area using BeautifulSoup as a fallback or primary if XPath failed ---
-        if details['area_m2'] == 'N/A' or lxml_tree is None: # If XPath failed or lxml not available
-            print(f"[{self.site_name}] Attempting to extract area using BeautifulSoup.")
-            # Nowe podejście do wyszukiwania powierzchni
-            area_selectors = [
-                ('div.parameters__item', 'Powierzchnia'),
-                ('div.technical-data__item', 'Powierzchnia'),
-                ('div.offer-details__item', 'Powierzchnia'),
-                ('div.summaryTable__row', 'Powierzchnia')
-            ]
-            
-            for selector, keyword in area_selectors:
-                elements = soup.select(selector)
-                for element in elements:
-                    if keyword in element.get_text():
-                        # Spróbuj znaleźć wartość liczbową z jednostką
-                        area_match = re.search(r'(\d+[\.,]?\d*)\s*(m²|m2|m\s*²)', element.get_text(), re.IGNORECASE)
-                        if area_match:
-                            area_value = area_match.group(1).replace(',', '.')
-                            details['area_m2'] = f"{area_value} {area_match.group(2)}"
-                            print(f"[{self.site_name}] Found area: {details['area_m2']}")
-                            break
-                if details['area_m2'] != 'N/A':
-                    break
+        # Parsowanie powierzchni (fallback BS jeśli XPath nie zadziałał)
+        if details['area_m2'] == 'N/A':
             if parameters_section:
-                # Try to find a label "Powierzchnia" and get its value
-                area_label_tag = parameters_section.find(lambda tag: tag.name in ['span', 'div', 'dt', 'th'] and "Powierzchnia" in tag.get_text() and "całkowita" not in tag.get_text()) # Avoid "Powierzchnia całkowita" if it's different
-                if area_label_tag:
-                    value_tag = area_label_tag.find_next_sibling(['span', 'div', 'dd', 'td'])
-                    if value_tag and "m²" in value_tag.get_text():
-                        area_text_bs = value_tag.get_text(strip=True)
-                        details['area_m2'] = area_text_bs
-                        print(f"[{self.site_name}] Area (BeautifulSoup - label 'Powierzchnia'): {details['area_m2']}")
+                text = parameters_section.get_text(separator=" ", strip=True)
+                m = re.search(r'(\d+[\.,]?\d*)\s*(m²|m2|m\s*²)', text, re.IGNORECASE)
+                if m:
+                    details['area_m2'] = f"{m.group(1).replace(',', '.')} {m.group(2)}"
+            if details['area_m2'] == 'N/A':
+                m = re.search(r'(\d+[\.,]?\d*)\s*(m²|m2|m\s*²)', soup.get_text(), re.IGNORECASE)
+                if m:
+                    details['area_m2'] = f"{m.group(1).replace(',', '.')} {m.group(2)}"
+        print(f"[{self.site_name}] Area: {details['area_m2']}")
 
-                # If label search fails, try direct search for "m²" within the section
-                if details['area_m2'] == 'N/A':
-                    area_tag_bs = parameters_section.find(lambda tag: tag.name in ['span', 'div', 'li', 'dd', 'td'] and "m²" in tag.get_text() and "Cena za m²" not in tag.get_text())
-                    if area_tag_bs:
-                        area_text_bs = area_tag_bs.get_text(strip=True)
-                        if ":" in area_text_bs: # Simple cleaning if it's like "Label: Value"
-                            area_text_bs = area_text_bs.split(":")[-1].strip()
-                        details['area_m2'] = area_text_bs
-                        print(f"[{self.site_name}] Area (BeautifulSoup - parameters section, m² search): {details['area_m2']}")
-            
-            if details['area_m2'] == 'N/A': # If still not found, try a more general page-wide search for text with m²
-                area_tag_direct = soup.find(lambda tag: tag.name in ['span', 'div'] and "m²" in tag.get_text() and "Cena za m²" not in tag.get_text() and len(tag.get_text(strip=True)) < 30 and len(tag.find_all()) < 3) # Avoid long description texts and complex tags
-                if area_tag_direct:
-                    area_text_direct = area_tag_direct.get_text(strip=True)
-                    if ":" in area_text_direct: 
-                        area_text_direct = area_text_direct.split(":")[-1].strip()
-                    details['area_m2'] = area_text_direct
-                    print(f"[{self.site_name}] Area (BeautifulSoup - direct page m² search): {details['area_m2']}")
-        
-        # Ensure essential fields are not None before returning, as per BaseScraper expectations
-        details.setdefault('title', 'N/A')
-        details.setdefault('price', 'N/A')
-        details.setdefault('description', 'N/A')
-        details.setdefault('image_count', 0)
-        details.setdefault('area_m2', 'N/A')
-        # first_image_url can be None
-
-        print(f"[{self.site_name}] Parsed details: Price='{details['price']}', Area='{details['area_m2']}', Title='{details['title'][:30]}...'")
         return details
