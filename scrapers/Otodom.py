@@ -1,3 +1,4 @@
+import re
 import requests
 from fake_useragent import UserAgent
 from bs4 import BeautifulSoup
@@ -179,23 +180,26 @@ class OtodomScraper(BaseScraper):
         # Extract parameters from multiple possible sections
         params = {}
         
-        # Standard parameters section
-        for param in soup.find_all('div', {'class': 'css-1qzszy5'}):
-            name = param.find('div', {'class': 'css-1wi2w6s'})
-            value = param.find('div', {'class': 'css-1ytkscc'})
-            if name and value:
-                params[name.get_text(strip=True)] = value.get_text(strip=True)
-        
-        # Additional parameters section (e.g. in developer listings)
-        extra_params = soup.find('div', {'data-testid': 'ad.top-information.table'})
-        if extra_params:
-            for row in extra_params.find_all('div', {'data-testid': 'table-row'}):
+        # Main parameters section
+        params_section = soup.find('div', {'data-testid': 'ad.top-information.table'})
+        if params_section:
+            for row in params_section.find_all('div', {'data-testid': 'table-row'}):
                 cells = row.find_all('div')
                 if len(cells) >= 2:
-                    name = cells[0].get_text(strip=True)
+                    name = cells[0].get_text(strip=True).replace(':', '')
                     value = cells[1].get_text(strip=True)
                     if name and value:
-                        params[name.replace(':', '')] = value
+                        params[name] = value
+
+        # Additional parameters from description
+        description = soup.find('div', {'data-cy': 'adPageAdDescription'})
+        if description:
+            desc_text = description.get_text()
+            # Extract key details from description text
+            if 'powierzchni' in desc_text.lower():
+                area_match = re.search(r'(\d+[,.]\d+)\s*m\s*kw', desc_text)
+                if area_match:
+                    params['Powierzchnia'] = area_match.group(1).replace(',', '.')
 
         # Extract and standardize important parameters
         def clean_area(area_str):
@@ -214,8 +218,17 @@ class OtodomScraper(BaseScraper):
             except (ValueError, TypeError):
                 return None
 
-        details['area_m2'] = clean_area(params.get('Powierzchnia') or params.get('Powierzchni', ''))
-        details['rooms'] = clean_rooms(params.get('Liczba pokoi') or params.get('Liczba pokoji', ''))
+        # Try multiple possible parameter names
+        details['area_m2'] = clean_area(
+            params.get('Powierzchnia') or 
+            params.get('Powierzchni') or
+            params.get('Metraż')
+        )
+        details['rooms'] = clean_rooms(
+            params.get('Liczba pokoi') or 
+            params.get('Liczba pokoji') or
+            params.get('Pokoje')
+        )
         details['floor'] = params.get('Piętro', 'N/A').split('/')[0].strip()  # Handle format like "parter/2"
 
         # Extract image count
