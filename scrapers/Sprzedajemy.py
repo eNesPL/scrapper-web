@@ -17,16 +17,17 @@ class sprzedajemyScraper(BaseScraper):
         self.MAX_PAGES = 5  # Maksymalna liczba stron do przeszukania
         # self.base_url = "https://www.sprzedajemy.pl" # Example base URL
 
-    def fetch_listings_page(self, search_criteria):
+    def fetch_listings_page(self, search_criteria, page=1):
         """
         Fetches the HTML content of the main listings page from sprzedajemy.pl.
         :param search_criteria: dict, search parameters (e.g., location, property_type).
+        :param page: int, page number to fetch (default: 1)
         :return: HTML content (str) or None.
         """
         import requests
         from fake_useragent import UserAgent
         
-        print(f"[{self.site_name}] Fetching listings page with criteria: {search_criteria}")
+        print(f"[{self.site_name}] Fetching listings page {page} with criteria: {search_criteria}")
         
         headers = {
             'User-Agent': UserAgent().random,
@@ -41,7 +42,8 @@ class sprzedajemyScraper(BaseScraper):
             'inp_attribute_143[from]': search_criteria.get('min_area', 25),
             'inp_attribute_145[from]': search_criteria.get('min_rooms', 2),
             'inp_attribute_245[from]': search_criteria.get('min_year', 1950),
-            'items_per_page': 30
+            'items_per_page': 30,
+            'offset': (page - 1) * 30
         }
         
         try:
