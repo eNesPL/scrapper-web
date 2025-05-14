@@ -262,8 +262,11 @@ class MorizonScraper(BaseScraper):
                 description_parts.append(main_desc_text)
                 print(f"[{self.site_name}] Main description text found. Length: {len(main_desc_text)}")
 
-        # Area extraction - first try structured data
+        # Area extraction - multiple fallbacks
         area_tag = soup.find('span', string=lambda t: t and 'Pow. całkowita' in t)
+        if not area_tag:
+            area_tag = soup.find('span', string=lambda t: t and 'Powierzchnia' in t)
+        
         if area_tag:
             area_value = area_tag.find_next_sibling('span')
             if area_value:
@@ -272,10 +275,17 @@ class MorizonScraper(BaseScraper):
         
         # Fallback to regex search if still not found
         if details['area_m2'] == 'N/A':
-            area_match = re.search(r'Pow\.\s*całkowita:\s*([\d,\.]+)\s*m²', html_content)
+            area_match = re.search(r'(Pow\.|Powierzchnia)\s*(całkowita|użytkowa)?\s*:\s*([\d,\.]+)\s*m²', html_content)
+            if area_match:
+                details['area_m2'] = f"{area_match.group(3)} m²"
+                print(f"[{self.site_name}] Area (regex fallback): {details['area_m2']}")
+        
+        # Final fallback - look for area in title or summary
+        if details['area_m2'] == 'N/A':
+            area_match = re.search(r'(\d+)\s*m²', details['title'])
             if area_match:
                 details['area_m2'] = f"{area_match.group(1)} m²"
-                print(f"[{self.site_name}] Area (regex fallback): {details['area_m2']}")
+                print(f"[{self.site_name}] Area (title fallback): {details['area_m2']}")
 
         # Structured Details from div.FONERK (or similar) to be added to description
         # This replaces the old sections_to_parse logic
@@ -342,24 +352,46 @@ class MorizonScraper(BaseScraper):
                                     print(f"[{self.site_name}] Area (BS fallback - old propertyDetails 'Pow. całkowita'): {details['area_m2']}")
                         if details['area_m2'] != 'N/A': break 
 
-        # Description fallback if still empty
-        if not description_parts or details['description'] == 'N/A':
-            desc_div = soup.find('div', class_='description__content')
-            if desc_div:
-                details['description'] = desc_div.get_text(separator='\n', strip=True)
+        # Description extraction with better fallbacks
+        desc_div = soup.find('div', class_='description__content')
+        if desc_div:
+            # Remove buttons and other non-description elements
+            for element in desc_div.find_all(['button', 'a', 'div', 'span']):
+                element.decompose()
+            details['description'] = desc_div.get_text(separator='\n', strip=True)
         
+        # Fallback - look for description in other sections
+        if not details['description'] or details['description'] == 'N/A':
+            section = soup.find('section', string='Opis nieruchomości')
+            if section:
+                next_div = section.find_next('div')
+                if next_div:
+                    details['description'] = next_div.get_text(separator='\n', strip=True)
+        
+        # Clean up description
         if details['description'] and details['description'] != 'N/A':
+            details['description'] = re.sub(r'\s+', ' ', details['description']).strip()
             details['description'] = details['description'][:1000] + '...' if len(details['description']) > 1000 else details['description']
         print(f"[{self.site_name}] Final description length: {len(details['description'])}")
 
 
         # Image Count
-        photos_counter_button = soup.find(['button', 'a'], class_='summary__photos-counter')
+        photos_counter_button = soup.find(['button', 'a'], string=re.compile(r'Zobacz \d+ zdjęć'))
+        if not photos_counter_button:
+            photos_counter_button = soup.find(['button', 'a'], string=re.compile(r'\d+ zdjęć'))
+        
         if photos_counter_button:
-            counter_text = photos_counter_button.get_text(strip=True) # e.g., "Zobacz 8 zdjęć"
+            counter_text = photos_counter_button.get_text(strip=True)
             match = re.search(r'(\d+)', counter_text)
             if match:
                 details['image_count'] = int(match.group(1))
+        else:
+            # Fallback - look for number in gallery section
+            gallery_div = soup.find('div', class_='gallery')
+            if gallery_div:
+                img_tags = gallery_div.find_all('img')
+                details['image_count'] = len(img_tags)
+        
         print(f"[{self.site_name}] Image count: {details['image_count']}")
 
         # First Image URL
