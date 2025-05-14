@@ -26,13 +26,9 @@ class OtodomScraper(BaseScraper):
         import requests
         from fake_useragent import UserAgent
         
-        print(f"[{self.site_name}] Fetching listings page {page} with criteria: {search_criteria}")
+        print(f"[{self.site_name}] Fetching listings page {page}")
         
-        location = search_criteria.get('location', 'warszawa')
-        prop_type = search_criteria.get('property_type', 'mieszkanie')
-        min_beds = search_criteria.get('min_beds', 1)
-        
-        url = f"https://www.otodom.pl/pl/oferty/sprzedaz/{prop_type}/{location}?page={page}"
+        url = "https://www.otodom.pl/pl/oferty/sprzedaz/mieszkanie/gliwice?limit=36&ownerTypeSingleSelect=ALL&priceMax=300000&areaMin=25&buildYearMin=1950&roomsNumber=%5BTWO%2CTHREE%5D&by=DEFAULT&direction=DESC&viewType=listing&page={page}"
         
         try:
             headers = {
