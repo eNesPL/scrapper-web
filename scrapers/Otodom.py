@@ -295,20 +295,24 @@ class OtodomScraper(BaseScraper):
         if not image_tags:
             image_tags = soup.select('img[src*="ireland.apollo.olxcdn.com"]')
         
-        # Clean and store all image URLs
+        # Clean and store all image URLs, filtering out logos
         details['images'] = []
         for img in image_tags:
             src = img.get('src') or img.get('data-src')
-            if src and src.startswith(('http://', 'https://')):
+            if (src and src.startswith(('http://', 'https://')) 
+                and not any(logo_word in src.lower() for logo_word in ['logo', 'agent', 'biuro', 'deweloper'])
+                and 'user' not in src.lower()):
                 # Clean up image URL - remove size parameters
                 clean_src = src.split('?')[0].split(';')[0]
                 details['images'].append(clean_src)
         
         details['image_count'] = len(details['images'])
         
-        # Set main image - prioritize explicit main_image, then first image
+        # Set main image - prioritize explicit main_image, then first non-logo image
         if details['images']:
-            main_image = details['images'][0]
+            main_image = next((img for img in details['images'] 
+                             if not any(logo_word in img.lower() for logo_word in ['logo', 'agent'])), 
+                             details['images'][0])
         
         details['main_image'] = main_image
 

@@ -97,8 +97,12 @@
         {% for listing in listings %}
         <div class="listing">
             <h2><a href="{{ listing.url }}" target="_blank">{{ listing.title }}</a></h2>
-            {% if listing.main_image %}
+            {% if listing.main_image and 'logo' not in listing.main_image.lower() %}
             <img src="{{ listing.main_image }}" style="max-width: 300px; max-height: 200px; margin-bottom: 10px;" alt="Zdjęcie nieruchomości">
+            {% else %}
+            <div style="width:300px; height:200px; background:#f0f0f0; display:flex; align-items:center; justify-content:center; margin-bottom:10px;">
+                Brak zdjęcia
+            </div>
             {% endif %}
             <div class="price">{{ notification_manager._format_price(listing.price) if listing.price else 'N/A' }}</div>
             
