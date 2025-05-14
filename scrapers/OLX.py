@@ -134,7 +134,6 @@ class OLXScraper(BaseScraper):
                     date = location_parts[1].strip() if len(location_parts) > 1 else ''
                 
                 # Get size
-                # size = None # Niepotrzebne, bo jest deklarowane niżej
                 size_container = listing_card.find('div', {'color': 'text-global-secondary'})
                 size = None # Zresetuj size dla każdej karty
                 if size_container:
@@ -170,8 +169,13 @@ class OLXScraper(BaseScraper):
             # Jeśli `main_content_area` nie został znaleziony (i zwrócono wcześniej), to ten kod nie zostanie osiągnięty.
             # Jeśli `main_content_area` istniał, ale nie było ofert (np. pusta strona),
             # `listings` będzie puste, `has_next_page` będzie `False`.
-            # Jeśli były oferty i nie było separatora, `has_next_page` będzie `True`.
-            has_next_page = len(listings) > 0 
+            # Sprawdź, czy istnieje klikalny link "Następna strona".
+            # Na OLX, aktywny przycisk "dalej" to <a> z data-testid="pagination-forward" i atrybutem href.
+            next_page_link = soup.find('a', attrs={'data-testid': 'pagination-forward', 'href': True})
+            if next_page_link:
+                has_next_page = True
+            else:
+                has_next_page = False
 
         return listings, has_next_page
 
@@ -197,7 +201,7 @@ class OLXScraper(BaseScraper):
         :param html_content: str, HTML content of the listing detail page.
         :return: Dictionary with detailed property info.
         """
-        from bs4 import BeautifulSoup
+        # BeautifulSoup jest już importowany na poziomie modułu
         print(f"[{self.site_name}] Parsing listing details page content.")
         
         if not html_content:
