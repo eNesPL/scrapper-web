@@ -106,9 +106,10 @@ class OtodomScraper(BaseScraper):
             }
             listings.append(listing_data)
             
-        # Simple check for next page - we'll assume there are more pages if we found any listings
-        # and we're not on the last page (based on MAX_PAGES which is handled in base_scraper)
-        has_next_page = len(listings) > 0
+        # Check for next page button
+        next_page_button = soup.find('a', {'data-cy': 'pagination.next-page'})
+        has_next_page = next_page_button is not None and len(listings) > 0
+        
         return listings, has_next_page
 
     def fetch_listing_details_page(self, listing_url):
