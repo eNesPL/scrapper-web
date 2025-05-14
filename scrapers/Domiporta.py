@@ -23,10 +23,11 @@ class DomiportaScraper(BaseScraper):
         self.base_url = "https://www.domiporta.pl"
         self.MAX_PAGES = 5  # Maksymalna liczba stron do przeszukania
 
-    def fetch_listings_page(self, search_criteria):
+    def fetch_listings_page(self, search_criteria, page=1):
         """
         Fetches the HTML content of the main listings page from Domiporta.pl.
         :param search_criteria: dict, search parameters (ignored as we use hardcoded URL).
+        :param page: int, page number to fetch (default: 1)
         :return: HTML content (str) or None.
         """
         self.base_url = "https://www.domiporta.pl"
