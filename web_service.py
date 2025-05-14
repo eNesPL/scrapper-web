@@ -38,7 +38,10 @@ def get_listings_from_db():
                     price_str = str(listing['price'])
                     # Clean price string - remove zł, spaces, commas
                     price_clean = price_str.replace('zł', '').replace(' ', '').replace(',', '.').strip()
-                    listing['price_float'] = float(price_clean) if price_clean.replace('.', '').isdigit() else None
+                    try:
+                        listing['price_float'] = float(price_clean) if price_clean else None
+                    except ValueError:
+                        listing['price_float'] = None
                 except (ValueError, TypeError):
                     listing['price_float'] = None
             print(f"Processing listing URL: {listing.get('url')}, Raw data string from DB: {raw_data_str[:200]}...") # Log raw_data
@@ -73,9 +76,9 @@ def get_listings_from_db():
     
     # Sortowanie po cenach
     if sort == 'price_asc':
-        listings.sort(key=lambda x: x.get('price_float', float('inf')))
+        listings.sort(key=lambda x: float('inf') if x.get('price_float') is None else x['price_float'])
     elif sort == 'price_desc':
-        listings.sort(key=lambda x: x.get('price_float', float('-inf')), reverse=True)
+        listings.sort(key=lambda x: float('-inf') if x.get('price_float') is None else x['price_float'], reverse=True)
     elif sort == 'date_asc':
         listings.sort(key=lambda x: x.get('first_seen', ''))
     else:  # date_desc
