@@ -41,13 +41,25 @@ class NotificationManager:
         except Exception as e:
             print(f"An unexpected error occurred while sending Discord notification: {e}")
 
+    def _format_price(self, price):
+        """Format price in standard way: with thousand separators and zł suffix"""
+        if price is None:
+            return "N/A"
+        try:
+            price_float = float(price)
+            if price_float.is_integer():
+                return f"{int(price_float):,} zł".replace(",", " ")
+            return f"{price_float:,.2f} zł".replace(",", " ").replace(".", ",")
+        except (ValueError, TypeError):
+            return str(price)
+
     def format_new_listing_embed(self, listing_data):
         embed = {
             "title": f":sparkles: New Listing: {listing_data.get('title', 'N/A')}",
             "url": listing_data.get('url'),
             "color": 0x00FF00, # Green
             "fields": [
-                {"name": "Price", "value": str(listing_data.get('price', 'N/A')), "inline": True},
+                {"name": "Price", "value": self._format_price(listing_data.get('price')), "inline": True},
                 {"name": "Site", "value": listing_data.get('site_name', 'N/A'), "inline": True},
                 {"name": "Image Count", "value": str(listing_data.get('image_count', 'N/A')), "inline": True},
                 {"name": "Description", "value": (listing_data.get('description', 'N/A')[:200] + '...') if listing_data.get('description') and len(listing_data.get('description', '')) > 200 else listing_data.get('description', 'N/A'), "inline": False},
@@ -76,15 +88,19 @@ class NotificationManager:
             if isinstance(new_value, float) and new_value.is_integer():
                 new_value = int(new_value)
                 
-            change_desc = f"**{field.replace('_', ' ').title()}**: `{old_value}` → `{new_value}`"
-            change_descriptions.append(change_desc)
-            # Dodaj szczegółowe pola dla ważnych zmian
+            # Formatowanie specjalne dla cen
             if field == 'price':
+                formatted_old = self._format_price(old_value)
+                formatted_new = self._format_price(new_value)
+                change_desc = f"**{field.replace('_', ' ').title()}**: {formatted_old} → {formatted_new}"
                 fields.append({
                     "name": "Price Change",
-                    "value": f"`{old_value} zł` → `{new_value} zł`",
+                    "value": f"**{formatted_old}** → **{formatted_new}**",
                     "inline": True
                 })
+            else:
+                change_desc = f"**{field.replace('_', ' ').title()}**: `{old_value}` → `{new_value}`"
+            change_descriptions.append(change_desc)
 
 
         embed = {
