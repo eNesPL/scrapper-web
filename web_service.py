@@ -50,8 +50,8 @@ def get_listings_from_db():
             
             # Use description from raw_data if available, otherwise fallback to column, then 'N/A'
             listing['description'] = description_from_raw if description_from_raw is not None else listing.get('description', 'N/A')
-            listing['main_image'] = raw_data.get('main_image', None)  # Add main image from raw_data
-
+            listing['main_image'] = raw_data.get('main_image') or raw_data.get('images', [None])[0]  # Get main_image or first image
+            
             # Ensure that empty or whitespace-only descriptions are treated as 'N/A'
             if not listing['description'] or listing['description'].isspace():
                 listing['description'] = 'N/A'
