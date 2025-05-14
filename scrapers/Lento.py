@@ -441,24 +441,44 @@ class LentoScraper(BaseScraper):
                     print(f"[{self.site_name}] Image count from counter: {details['image_count']}")
 
         # Get first image URL from multiple possible sources
-        # Source 1: Main image in preview
-        main_image = soup.find('div', id='big-img').find('img') if soup.find('div', id='big-img') else None
-        if not main_image:
-            main_image = soup.find('img', {'id': 'photoview_img'})
-
-        if main_image:
-            img_src = (main_image.get('src') or 
-                      main_image.get('data-src') or
-                      main_image.find_parent('picture').find('source').get('srcset') if main_image.find_parent('picture') else None)
-            
-            if img_src:
-                if img_src.startswith('//'):
-                    details['first_image_url'] = f"https:{img_src}"
-                elif not img_src.startswith('http'):
-                    details['first_image_url'] = f"{self.base_url}{img_src if img_src.startswith('/') else '/' + img_src}"
-                else:
-                    details['first_image_url'] = img_src
-                print(f"[{self.site_name}] Found main image: {details['first_image_url']}")
+        # Source 1: Check big-img container
+        big_img_div = soup.find('div', id='big-img')
+        if big_img_div:
+            img_tag = big_img_div.find('img')
+            if img_tag:
+                img_src = img_tag.get('src') or img_tag.get('data-src')
+                if not img_src:
+                    picture_tag = big_img_div.find('picture')
+                    if picture_tag:
+                        source_tag = picture_tag.find('source')
+                        if source_tag:
+                            img_src = source_tag.get('srcset')
+        
+        # Source 2: Check mobile gallery
+        if not img_src:
+            mobile_gallery = soup.find('div', id='mobile-gallery')
+            if mobile_gallery:
+                img_tag = mobile_gallery.find('img')
+                if img_tag:
+                    img_src = img_tag.get('src') or img_tag.get('data-lazy') or img_tag.get('data-src')
+        
+        # Source 3: Check thumbnails gallery
+        if not img_src:
+            thumbnails_gallery = soup.find('div', id='thumbnails-gallery')
+            if thumbnails_gallery:
+                first_thumbnail = thumbnails_gallery.find('a', href=True)
+                if first_thumbnail:
+                    img_src = first_thumbnail.get('href')
+        
+        # Process found image source
+        if img_src:
+            if img_src.startswith('//'):
+                details['first_image_url'] = f"https:{img_src}"
+            elif not img_src.startswith('http'):
+                details['first_image_url'] = f"{self.base_url}{img_src if img_src.startswith('/') else '/' + img_src}"
+            else:
+                details['first_image_url'] = img_src
+            print(f"[{self.site_name}] Found main image: {details['first_image_url']}")
 
         # If we have first image but count is still 0, set to at least 1
         if details['first_image_url'] and details['image_count'] == 0:
