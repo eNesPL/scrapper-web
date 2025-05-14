@@ -21,8 +21,8 @@ RUN chmod 0644 /etc/cron.d/scraper-cron
 RUN touch /var/log/cron.log
 
 # Start script
-COPY start.sh /start.sh
-RUN chmod +x /start.sh
+RUN echo '#!/bin/sh\ncron\npython web_service.py &\ntail -f /dev/null' > /start.sh && \
+    chmod +x /start.sh
 
 ENV PATH=/root/.local/bin:$PATH
 
