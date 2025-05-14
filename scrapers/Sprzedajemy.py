@@ -207,7 +207,15 @@ class sprzedajemyScraper(BaseScraper):
                 key = item.find('span').get_text(strip=True) if item.find('span') else None
                 value = item.find('strong').get_text(strip=True) if item.find('strong') else None
                 if key and value:
-                    params[key] = value
+                    # Normalize common parameter names
+                    if 'Powierzchnia' in key:
+                        params['area'] = value.replace('m²', '').strip()
+                    elif 'Liczba pokoi' in key:
+                        params['rooms'] = value
+                    elif 'Piętro' in key:
+                        params['floor'] = value
+                    else:
+                        params[key] = value
         details['params'] = params
 
         # Extract description
@@ -216,9 +224,9 @@ class sprzedajemyScraper(BaseScraper):
         if desc_section:
             for p in desc_section.find_all('p'):
                 text = p.get_text(strip=True)
-                if text:
+                if text and text != 'Brak opisu':
                     description.append(text)
-        details['description'] = '\n\n'.join(description) if description else 'N/A'
+        details['description'] = '\n\n'.join(description) if description else 'Brak opisu'
 
         # Extract all images safely
         details['images'] = []
@@ -227,11 +235,14 @@ class sprzedajemyScraper(BaseScraper):
         if gallery:
             images = []
             for img in gallery.find_all('img', loading=lambda x: x in ['lazy', None]):
-                src = img.get('src')
+                src = img.get('src') or img.get('data-src')
                 if src and src.startswith(('http://', 'https://')):
-                    images.append(src)
+                    if 'placeholder' not in src.lower():
+                        images.append(src)
             details['images'] = images
             details['image_count'] = len(images)
+        if details['image_count'] == 0:
+            details['main_image'] = None
 
         # Ensure required fields
         details.setdefault('title', soup.find('h1').get_text(strip=True) if soup.find('h1') else 'N/A')
