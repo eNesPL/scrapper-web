@@ -21,16 +21,17 @@ class LentoScraper(BaseScraper):
         self.base_url = "https://www.lento.pl"
         self.MAX_PAGES = 5  # Maksymalna liczba stron do przeszukania
 
-    def fetch_listings_page(self, search_criteria):
+    def fetch_listings_page(self, search_criteria, page=1):
         """
         Fetches the HTML content of the main listings page from Lento.pl.
         :param search_criteria: dict, search parameters (e.g., location, property_type).
+        :param page: int, page number to fetch (default: 1)
         :return: HTML content (str) or None.
         """
-        # Using the provided example URL
-        example_url = "https://gliwice.lento.pl/nieruchomosci/mieszkania/sprzedaz.html?price_from=50000&price_to=300000&atr_1_from=20&atr_2_in%5B0%5D=2&atr_2_in%5B1%5D=3"
+        # Using the provided example URL with pagination
+        example_url = f"https://gliwice.lento.pl/nieruchomosci/mieszkania/sprzedaz.html?price_from=50000&price_to=300000&atr_1_from=20&atr_2_in%5B0%5D=2&atr_2_in%5B1%5D=3&page={page}"
         
-        print(f"[{self.site_name}] Fetching listings page using URL: {example_url} (Criteria: {search_criteria})")
+        print(f"[{self.site_name}] Fetching listings page {page} using URL: {example_url} (Criteria: {search_criteria})")
         
         try:
             response = requests.get(example_url, timeout=10)
@@ -188,7 +189,11 @@ class LentoScraper(BaseScraper):
         elif not listing_elements:
             print(f"[{self.site_name}] No listing elements found on the page. Check page structure or selectors.")
 
-        return listings
+        # Simple check for next page - look for pagination next button
+        next_button = soup.find('a', class_='next')
+        has_next_page = next_button is not None and 'disabled' not in next_button.get('class', [])
+        
+        return listings, has_next_page
 
     def fetch_listing_details_page(self, listing_url):
         """
