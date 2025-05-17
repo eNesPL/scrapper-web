@@ -12,10 +12,14 @@ WORKDIR /app
 COPY --from=builder /root/.local /root/.local
 COPY . .
 
-# No cron needed
+# Install yacron
+RUN apt-get update && apt-get install -y --no-install-recommends yacron && rm -rf /var/lib/apt/lists/*
+
+# Copy yacron configuration
+COPY yacron.conf /etc/yacron.conf
 
 # Start script
-RUN echo '#!/bin/sh\nwhile true; do python main.py >> /var/log/scraper.log 2>&1; sleep 3600; done\npython web_service.py &\ntail -f /dev/null' > /start.sh && \
+RUN echo '#!/bin/sh\nyacron &\npython web_service.py >> /var/log/web_service.log 2>&1\ntail -f /var/log/web_service.log' > /start.sh && \
     chmod +x /start.sh
 
 ENV PATH=/root/.local/bin:$PATH
