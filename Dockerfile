@@ -12,16 +12,10 @@ WORKDIR /app
 COPY --from=builder /root/.local /root/.local
 COPY . .
 
-# Install cron
-RUN apt-get update && apt-get install -y cron && rm -rf /var/lib/apt/lists/*
-
-# Add crontab file
-COPY crontab /etc/cron.d/scraper-cron
-RUN chmod 0644 /etc/cron.d/scraper-cron
-RUN touch /var/log/cron.log
+# No cron needed
 
 # Start script
-RUN echo '#!/bin/sh\ncron\npython web_service.py &\ntail -f /dev/null' > /start.sh && \
+RUN echo '#!/bin/sh\nwhile true; do python main.py >> /var/log/scraper.log 2>&1; sleep 3600; done\npython web_service.py &\ntail -f /dev/null' > /start.sh && \
     chmod +x /start.sh
 
 ENV PATH=/root/.local/bin:$PATH
