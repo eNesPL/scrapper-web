@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: real-estate-scraper-pod
+  labels:
+    app: real-estate-scraper
+spec:
+  containers:
+    - name: real-estate-scraper
+      image: YOUR_DOCKER_IMAGE_NAME  # Zastąp nazwą Twojego obrazu Docker
+      imagePullPolicy: IfNotPresent
+      ports:
+        - containerPort: 5000  # Port, na którym działa web service
+      volumeMounts:
+        - mountPath: /var/log/scraper
+          name: scraper-log-volume
+  volumes:
+    - name: scraper-log-volume
+      emptyDir: {}

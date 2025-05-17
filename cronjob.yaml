@@ -1,0 +1,27 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: real-estate-scraper-cronjob
+spec:
+  schedule: "0 * * * *"  # Uruchamiaj co godzinę
+  jobTemplate:
+    spec:
+      template:
+        metadata:
+          labels:
+            app: real-estate-scraper
+        spec:
+          containers:
+            - name: real-estate-scraper
+              image: YOUR_DOCKER_IMAGE_NAME  # Zastąp nazwą Twojego obrazu Docker
+              imagePullPolicy: IfNotPresent
+              command: ["python", "/app/main.py"]  # Uruchom scraper
+              volumeMounts:
+                - mountPath: /var/log/scraper
+                  name: scraper-log-volume
+          restartPolicy: OnFailure
+          volumes:
+            - name: scraper-log-volume
+              emptyDir: {}
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
