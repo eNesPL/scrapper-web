@@ -1,0 +1,29 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: real-estate-web-deployment
+  labels:
+    app: real-estate-web
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: real-estate-web
+  template:
+    metadata:
+      labels:
+        app: real-estate-web
+    spec:
+      containers:
+        - name: real-estate-web
+          image: YOUR_WEB_DOCKER_IMAGE  # Zastąp nazwą Twojego obrazu Docker
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 5000
+          volumeMounts:
+            - mountPath: /app/data
+              name: db-volume
+      volumes:
+        - name: db-volume
+          persistentVolumeClaim:
+            claimName: real-estate-db-pvc
