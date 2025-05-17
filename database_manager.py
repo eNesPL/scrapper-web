@@ -1,9 +1,11 @@
 import sqlite3
 import datetime
 import json # For storing list of features if needed, or other complex types
+import os
 
 class DatabaseManager:
     def __init__(self, db_name):
+        self.db_name = os.path.join("/app/data", db_name) # Zmiana ścieżki
         self.db_name = db_name
 
     def _get_connection(self):
@@ -145,4 +147,3 @@ class DatabaseManager:
             print(f"Error updating last_checked for {url}: {e}")
         finally:
             conn.close()
-

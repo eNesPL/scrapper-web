@@ -13,15 +13,15 @@ spec:
         spec:
           containers:
             - name: real-estate-scraper
-              image: YOUR_DOCKER_IMAGE_NAME  # Zastąp nazwą Twojego obrazu Docker
+              image: YOUR_SCRAPER_DOCKER_IMAGE  # Zastąp nazwą Twojego obrazu Docker
               imagePullPolicy: IfNotPresent
-              command: ["python", "/app/main.py"]  # Uruchom scraper
               volumeMounts:
-                - mountPath: /var/log/scraper
-                  name: scraper-log-volume
+                - mountPath: /app/data
+                  name: db-volume
           restartPolicy: OnFailure
           volumes:
-            - name: scraper-log-volume
-              emptyDir: {}
+            - name: db-volume
+              persistentVolumeClaim:
+                claimName: real-estate-db-pvc
   successfulJobsHistoryLimit: 3
   failedJobsHistoryLimit: 3
