@@ -4,9 +4,9 @@ import inspect
 import sys
 import argparse
 
-# Import managers and config
-from common.database_manager import DatabaseManager
-from common.notification_manager import NotificationManager
+# Import managers and config 
+from common.database_manager import DatabaseManager  
+from common.notification_manager import NotificationManager  
 from common import config
 
 def discover_scrapers(scrapers_package_dir="scrapers"):
