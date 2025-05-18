@@ -91,7 +91,7 @@ def get_listings_from_db():
 def index():
     """Display a HTML page with all listings"""
     listings = get_listings_from_db()
-    return render_template('listings.html', 
+    return render_template('/app/web/templates/listings.html',
                          listings=listings,
                          notification_manager=notification_manager)
 

@@ -15,7 +15,7 @@ def discover_scrapers(scrapers_package_dir="scrapers"):
     Scraper classes must inherit from BaseScraper.
     Returns a dict mapping class names to classes.
     """
-    from scrapers.base_scraper import BaseScraper
+    from .scrapers.base_scraper import BaseScraper
 
     scraper_classes = {}
     base_dir = os.path.dirname(os.path.abspath(__file__))
