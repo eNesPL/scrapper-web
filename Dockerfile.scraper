@@ -12,12 +12,6 @@ WORKDIR /app
 COPY --from=builder /root/.local /root/.local
 COPY . .
 
-# Install yacron
-RUN apt-get update && apt-get install -y --no-install-recommends yacron && rm -rf /var/lib/apt/lists/*
-
-# Copy yacron configuration
-COPY yacron.conf /etc/yacron.conf
-
 ENV PATH=/root/.local/bin:$PATH
 
-CMD ["yacron"]
+CMD ["python", "-m", "scrapers.main"]

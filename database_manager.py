@@ -5,8 +5,7 @@ import os
 
 class DatabaseManager:
     def __init__(self, db_name):
-        self.db_name = os.path.join("/app/data", db_name) # Zmiana ścieżki
-        self.db_name = db_name
+        self.db_name = os.path.join("/app/data", db_name)
 
     def _get_connection(self):
         conn = sqlite3.connect(self.db_name)
