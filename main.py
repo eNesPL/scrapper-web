@@ -2,27 +2,22 @@ import importlib
 import os
 import inspect
 import sys
-import datetime # Required for NotificationManager embeds
+import argparse
 
-# Import new managers and config
+# Import managers and config
 from database_manager import DatabaseManager
 from notification_manager import NotificationManager
 import config
-
-# This will be dynamically populated by discover_scrapers
-# We need to ensure scrapers.base_scraper can be imported first
-# by adjusting sys.path before this type hint is resolved by linters in some cases.
-# from scrapers.base_scraper import BaseScraper # Moved import to after sys.path adjustment
 
 def discover_scrapers(scrapers_package_dir="scrapers"):
     """
     Dynamically discovers scraper classes in the specified directory.
     Scraper classes must inherit from BaseScraper.
+    Returns a dict mapping class names to classes.
     """
-    from scrapers.base_scraper import BaseScraper # Import here after sys.path adjustment
+    from scrapers.base_scraper import BaseScraper
 
     scraper_classes = {}
-    
     base_dir = os.path.dirname(os.path.abspath(__file__))
     scrapers_abs_path = os.path.join(base_dir, scrapers_package_dir)
 
@@ -30,125 +25,84 @@ def discover_scrapers(scrapers_package_dir="scrapers"):
         print(f"Error: Scrapers directory '{scrapers_abs_path}' not found.")
         return scraper_classes
 
+    # Iterate through .py files in scrapers directory
     for filename in os.listdir(scrapers_abs_path):
-        if filename.endswith(".py") and filename not in ("__init__.py", "base_scraper.py"):
-            module_name_in_package = filename[:-3]
-            full_module_path = f"{scrapers_package_dir}.{module_name_in_package}"
-            
-            try:
-                module = importlib.import_module(full_module_path)
-                
-                for name, obj in inspect.getmembers(module):
-                    if inspect.isclass(obj) and \
-                       issubclass(obj, BaseScraper) and \
-                       obj is not BaseScraper:
-                        scraper_classes[name] = obj
-                        # Removed print from here, will be listed later
-            except ImportError as e:
-                print(f"Error importing module {full_module_path}: {e}")
-            except Exception as e:
-                print(f"Error processing module {full_module_path}: {e}")
+        if not filename.endswith(".py") or filename in ("__init__.py", "base_scraper.py"):
+            continue
+
+        module_name = filename[:-3]
+        full_module_path = f"{scrapers_package_dir}.{module_name}"
+        try:
+            module = importlib.import_module(full_module_path)
+            for _, obj in inspect.getmembers(module, inspect.isclass):
+                if issubclass(obj, BaseScraper) and obj is not BaseScraper:
+                    scraper_classes[obj.__name__] = obj
+        except Exception as e:
+            print(f"Error loading {full_module_path}: {e}")
     return scraper_classes
 
 def main():
-    print("Real Estate Scraper Framework")
-    
-    current_script_dir = os.path.dirname(os.path.abspath(__file__))
-    project_root = current_script_dir
-    
+    # --- CLI arguments ---
+    parser = argparse.ArgumentParser(description="Framework do uruchamiania scraperów")
+    parser.add_argument(
+        "--only", "-o", nargs="+", metavar="ScraperClass",
+        help="Nazwy klas scraperów do uruchomienia (domyślnie wszystkie)"
+    )
+    args = parser.parse_args()
+
+    # --- Ścieżki i menedżery ---
+    project_root = os.path.dirname(os.path.abspath(__file__))
     if project_root not in sys.path:
         sys.path.insert(0, project_root)
 
-    # Initialize DatabaseManager
     db_manager = DatabaseManager(config.DATABASE_NAME)
     db_manager.init_db()
-
-    # Initialize NotificationManager
     notification_manager = NotificationManager(config.DISCORD_WEBHOOK_URL)
 
-    available_scrapers_dict = discover_scrapers()
+    # --- Odkrywanie scraperów ---
+    available = discover_scrapers()
+    # Wyłącz niechciane
+    for name in ("sprzedajemyScraper", "SzybkoScraper"):
+        if name in available:
+            del available[name]
+            print(f"Disabled scraper: {name}")
 
-    # Remove specific scrapers we want to disable
-    scrapers_to_disable = ['sprzedajemyScraper', 'SzybkoScraper']
-    for scraper_name in scrapers_to_disable:
-        if scraper_name in available_scrapers_dict:
-            del available_scrapers_dict[scraper_name]
-            print(f"Disabled scraper: {scraper_name}")
-
-    if not available_scrapers_dict:
-        print("No scrapers found. Make sure scraper modules are in the 'scrapers' directory,")
-        print("inherit from BaseScraper, and that 'scrapers/__init__.py' exists.")
+    if not available:
+        print("Brak scraperów do uruchomienia. Sprawdź katalog i dziedziczenie BaseScraper.")
         return
 
-    print("\nDostępne scrapers:")
-    print("0. Uruchom WSZYSTKIE scrapers")
-    scraper_display_list = []
-    # Sort scrapers by class name for consistent ordering
-    sorted_scraper_items = sorted(available_scrapers_dict.items())
+    # --- Wybór scraperów do runu ---
+    if args.only:
+        # Filtruj tylko wskazane
+        to_run = [
+            (name, cls) for name, cls in available.items()
+            if name in args.only
+        ]
+        missing = set(args.only) - {name for name, _ in to_run}
+        if missing:
+            print(f"Uwaga: nie znaleziono scraperów: {', '.join(missing)}")
+    else:
+        # Domyślnie wszystkie
+        to_run = list(available.items())
 
-    for i, (class_name, scraper_class) in enumerate(sorted_scraper_items):
+    # --- Kryteria wyszukiwania ---
+    search_criteria = {
+        'location': 'Gliwice',
+        'property_type': 'apartment',
+        'min_beds': 2,
+        'max_price': 300000,
+        'min_area': 25
+    }
+
+    # --- Uruchamianie ---
+    for cls_name, cls in sorted(to_run):
         try:
-            temp_instance = scraper_class(db_manager=None, notification_manager=None)
-            site_display_name = temp_instance.site_name
-        except TypeError as e: 
-            site_display_name = f"{class_name} (Błąd: nieprawidłowa sygnatura __init__? {e})"
+            scraper = cls(db_manager=db_manager, notification_manager=notification_manager)
+            print(f"[{cls_name}] Running with criteria: {search_criteria}")
+            scraper.scrape(search_criteria)
+            print(f"[{cls_name}] Completed successfully\n")
         except Exception as e:
-            site_display_name = f"{class_name} (Błąd podczas inicjalizacji: {e})"
-        
-        scraper_display_list.append({'id': i + 1, 'name': site_display_name, 'class_name': class_name, 'class': scraper_class})
-        print(f"{i + 1}. {site_display_name} (Klasa: {class_name})")
-    
-    # Uruchom wszystkie scrapers
-    if scraper_display_list:
-        search_criteria = {
-            'location': 'Gliwice',
-            'property_type': 'apartment', 
-            'min_beds': 2,
-            'max_price': 300000,
-            'min_area': 25
-        }
-            print("\nRunning ALL scrapers...")
-            search_criteria = {
-                'location': 'Gliwice',
-                'property_type': 'apartment',
-                'min_beds': 2,
-                'max_price': 300000,
-                'min_area': 25
-            }
-            
-            for scraper_info in scraper_display_list:
-                try:
-                    scraper_instance = scraper_info['class'](db_manager=db_manager, notification_manager=notification_manager)
-                    print(f"\nRunning scraper: {scraper_instance.site_name} with criteria: {search_criteria}")
-                    scraper_instance.scrape(search_criteria)
-                    print(f"Completed scraping for {scraper_instance.site_name}")
-                except Exception as e:
-                    print(f"Error running {scraper_info['name']}: {e}")
-                    continue
-        else:
-            search_criteria = {
-                'location': 'Gliwice',
-                'property_type': 'apartment',
-                'min_beds': 2,
-                'max_price': 300000,
-                'min_area': 25
-            }
-            
-            print("\nRunning ALL scrapers...")
-            for scraper_info in scraper_display_list:
-                try:
-                    scraper_instance = scraper_info['class'](db_manager=db_manager, notification_manager=notification_manager)
-                    print(f"\nRunning scraper: {scraper_instance.site_name} with criteria: {search_criteria}")
-                    scraper_instance.scrape(search_criteria)
-                    print(f"Completed scraping for {scraper_instance.site_name}")
-                except Exception as e:
-                    print(f"Error running {scraper_info['name']}: {e}")
-                    continue
-        # Optionally, display data from DB or summary stats here
-        
-    else: # Should not be reached if loop for selection works correctly
-        print(f"Could not select a scraper to run.")
-
+            print(f"[{cls_name}] ERROR: {e}\n")
 
 if __name__ == "__main__":
     main()
