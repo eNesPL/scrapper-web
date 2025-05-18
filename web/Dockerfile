@@ -10,7 +10,9 @@ FROM python:3.9-slim
 
 WORKDIR /app
 COPY --from=builder /root/.local /root/.local
-COPY . .
+COPY web/ /app/web
+COPY common/ /app/common
+COPY templates/ /app/templates
 
 ENV PATH=/root/.local/bin:$PATH
 
