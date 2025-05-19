@@ -14,4 +14,4 @@ COPY . .
 
 ENV PATH=/root/.local/bin:$PATH
 
-CMD ["python", "web_service.py"]
+CMD ["python", "web/web_service.py"] # Uruchom web service
