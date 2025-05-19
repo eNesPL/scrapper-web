@@ -1,17 +1,11 @@
-# Build stage
-FROM python:3.9-slim AS builder
+FROM python:3.9-slim
 
 WORKDIR /app
 COPY requirements.txt .
 RUN pip install --user --no-cache-dir -r requirements.txt
-
-# Runtime stage
-FROM python:3.9-slim
-
-WORKDIR /app
-COPY --from=builder /root/.local /root/.local
 COPY . .
 
 ENV PATH=/root/.local/bin:$PATH
 
-CMD ["python", "web/web_service.py"] # Uruchom web service
+CMD ["python3", "-m", "web_service.py"]
+
