@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
         - name: real-estate-web
-          image: YOUR_WEB_DOCKER_IMAGE  # Zastąp nazwą Twojego obrazu Docker
+          image: ghcr.io/enespl/scrapper-web
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 5000
