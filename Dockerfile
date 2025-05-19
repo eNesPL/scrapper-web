@@ -1,5 +1,5 @@
 # Build stage
-FROM python:3.9-slim as builder
+FROM python:3.9-slim AS builder
 
 WORKDIR /app
 COPY requirements.txt .
@@ -14,4 +14,4 @@ COPY . .
 
 ENV PATH=/root/.local/bin:$PATH
 
-CMD ["python", "web_service.py"] # Uruchom web service
+CMD ["python", "web/web_service.py"] # Uruchom web service
