@@ -7,5 +7,5 @@ COPY . .
 
 ENV PATH=/root/.local/bin:$PATH
 
-CMD ["python3", "-m", "web_service.py"]
+CMD ["python3", "web_service.py"]
 
