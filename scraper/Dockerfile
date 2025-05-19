@@ -4,9 +4,9 @@ WORKDIR /app
 
 COPY scrapers/ /app/scrapers
 COPY common/ /app/common
-COPY common/ /app/common
+COPY main.py /app
 COPY requirements.txt .
 
 RUN pip install --no-cache-dir -r requirements.txt
 
-CMD ["python", "-m", "scrapers.main"]
+CMD ["python", "-m", "main"]
