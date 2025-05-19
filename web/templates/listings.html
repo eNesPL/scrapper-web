@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Real Estate Listings</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body { 
+            font-family: Arial, sans-serif; 
+            margin: 10px;
+            max-width: 100%;
+            overflow-x: hidden;
+        }
+        .listing {
+            border: 1px solid #e0e0e0;
+            padding: 15px;
+            margin-bottom: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            background: #fff;
+            transition: transform 0.2s;
+            width: 100%;
+            box-sizing: border-box;
+        }
+        .listing:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 12px rgba(0,0,0,0.1);
+        }
+        .listing h2 { 
+            margin-top: 0;
+            color: #2c3e50;
+            font-size: 1.2em;
+            margin-bottom: 10px;
+            word-wrap: break-word;
+        }
+        .price {
+            color: #c1403d;
+            font-weight: 700;
+            font-size: 1.3em;
+            margin-bottom: 10px;
+            padding: 8px;
+            background: #fff5f5;
+            border-radius: 4px;
+            display: inline-block;
+            word-break: break-word;
+        }
+        .details-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 10px;
+            margin: 10px 0;
+        }
+        @media (max-width: 600px) {
+            .details-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+        .detail-item {
+            padding: 10px;
+            background: #f8f9fa;
+            border-radius: 4px;
+        }
+        .detail-item span:first-child {
+            color: #7f8c8d;
+            display: block;
+            font-size: 0.9em;
+            margin-bottom: 5px;
+        }
+        .detail-item span:last-child {
+            font-weight: 500;
+            color: #2c3e50;
+        }
+        .description {
+            margin: 10px 0;
+            line-height: 1.5;
+            color: #34495e;
+            white-space: pre-line;
+            word-wrap: break-word;
+            overflow-wrap: break-word;
+        }
+        .description ul {
+            padding-left: 15px;
+            list-style-type: square;
+        }
+        .last-updated {
+            font-size: 0.8em;
+            color: #95a5a6;
+            margin-top: 10px;
+            border-top: 1px solid #eee;
+            padding-top: 8px;
+        }
+        img {
+            max-width: 100%;
+            height: auto;
+            border-radius: 4px;
+            margin-bottom: 10px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .sort-options {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 5px;
+            margin-bottom: 15px;
+        }
+        .sort-options a {
+            display: inline-block;
+            padding: 5px 8px;
+            font-size: 0.9em;
+        }
+        a { 
+            color: #0066cc; 
+            text-decoration: none; 
+        }
+        a:hover { 
+            text-decoration: underline; 
+        }
+        @media (max-width: 480px) {
+            .listing {
+                padding: 10px;
+            }
+            .price {
+                font-size: 1.1em;
+                padding: 5px 8px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <h1>Real Estate Listings</h1>
+    
+    <div style="margin-bottom: 20px;">
+        <strong>Sortuj według:</strong>
+        <a href="?sort=price_asc">Cena rosnąco</a> |
+        <a href="?sort=price_desc">Cena malejąco</a> |
+        <a href="?sort=date_asc">Data dodania (najstarsze)</a> |
+        <a href="?sort=date_desc">Data dodania (najnowsze)</a>
+    </div>
+    
+    <div class="listings">
+        {% for listing in listings %}
+        <div class="listing">
+            <h2><a href="{{ listing.url }}" target="_blank">{{ listing.title }}</a></h2>
+            {% if listing.main_image and 'logo' not in listing.main_image.lower() %}
+            <img src="{{ listing.main_image }}" style="max-width: 300px; max-height: 200px; margin-bottom: 10px;" alt="Zdjęcie nieruchomości">
+            {% else %}
+            <div style="width:300px; height:200px; background:#f0f0f0; display:flex; align-items:center; justify-content:center; margin-bottom:10px;">
+                Brak zdjęcia
+            </div>
+            {% endif %}
+            <div class="price">{{ notification_manager._format_price(listing.price) if listing.price else 'N/A' }}</div>
+            
+            <div class="details-grid">
+                <div class="detail-item">
+                    <span>Powierzchnia</span>
+                    <span>{{ listing.area_m2 or 'N/A' }}</span>
+                </div>
+                <div class="detail-item">
+                    <span>Liczba zdjęć</span>
+                    <span>{{ listing.image_count }}</span>
+                </div>
+                <div class="detail-item">
+                    <span>Źródło</span>
+                    <span>{{ listing.site_name }}</span>
+                </div>
+            </div>
+
+            <div class="description">
+                {% if listing.description and listing.description != 'N/A' %}
+                    {{ listing.description }}
+                {% else %}
+                    Brak opisu
+                {% endif %}
+            </div>
+            <div class="last-updated">
+                Data dodania: {{ listing.first_seen }}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</body>
+</html>

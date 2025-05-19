@@ -1,14 +1,16 @@
 apiVersion: v1
 kind: Pod
 metadata:
-  name: real-estate-scraper-pod
+  name: real-estate-web-pod
   labels:
-    app: real-estate-scraper
+    app: real-estate-web
 spec:
   containers:
-    - name: real-estate-scraper
-      image: YOUR_SCRAPER_DOCKER_IMAGE  # Zastąp nazwą Twojego obrazu Docker
+    - name: real-estate-web
+      image: YOUR_WEB_DOCKER_IMAGE  # Zastąp nazwą Twojego obrazu Docker
       imagePullPolicy: IfNotPresent
+      ports:
+        - containerPort: 5000  # Port, na którym działa web service
       volumeMounts:
         - mountPath: /app/data
           name: db-volume
