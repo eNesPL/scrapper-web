@@ -105,17 +105,12 @@ class OtodomScraper(BaseScraper):
         soup = BeautifulSoup(html_content, 'html.parser')
         listings = []
         
-        # Enhanced listing container detection
-        # Try multiple container selectors with updated classes
+        # Find listings container using the main article grid
         listings_container = soup.select_one(
             'div[data-cy="search.listing"], '
-            'ul[data-cy="search.listing"], '
-            'div[data-testid="search.listing"], '
-            'div.css-1sjczni, '
-            'ul.css-1j2p3tj, '
-            'div.css-1q6l4jt, '
-            'div[class*="listing"], '
-            'ul[class*="listing"]'
+            'main[data-testid="search.listing"], '
+            'div[data-cy="listing-item"], '
+            'section[data-cy="listing-item"]'
         )
         
         if not listings_container:
@@ -126,12 +121,11 @@ class OtodomScraper(BaseScraper):
                 f.write(str(soup))
             return [], False
             
-        # More flexible item selector with updated classes
+        # Select all listing sections
         items = listings_container.select(
-            'li:has(a[href*="/pl/oferta/"]), '
-            'article:has(a[href*="/pl/oferta/"]), '
+            'section[data-cy="listing-item"], '
             'div[data-cy="listing-item"], '
-            'div.css-1nupfq7'
+            'article[data-cy="listing-item"]'
         )
         print(f"[{self.site_name}] Found {len(items)} potential listing elements")
         
@@ -141,9 +135,8 @@ class OtodomScraper(BaseScraper):
                 # Try multiple link selectors with updated classes
                 link = item.select_one(
                     'a[data-cy="listing-item-link"], '
-                    'a.css-1s5s5tw, '
-                    'a.css-1upf6v4, '
-                    'a[href*="/pl/oferta/"]'
+                    'a[href*="/pl/oferta/"], '
+                    'a[data-testid="listing-item-link"]'
                 )
                 
                 # Skip if still no suitable link
@@ -167,7 +160,7 @@ class OtodomScraper(BaseScraper):
                     'span[data-cy="price"], '
                     'div[data-cy="price"], '
                     'p[data-testid="ad-price"], '
-                    'div.css-1q9qal6'
+                    'strong.css-1b5n4ez'
                 )
 
                 price = None
@@ -185,7 +178,7 @@ class OtodomScraper(BaseScraper):
                 # New details selector
                 specs_dl = item.select_one(
                     'div[data-testid="ad-card-details"], '
-                    'div.css-1ji7bvd, '
+                    'div.css-1wi2w6s, '
                     'div[data-cy="ad-card-details"]'
                 )
                 if specs_dl:
@@ -220,10 +213,9 @@ class OtodomScraper(BaseScraper):
                 # Extract locations safely
                 location = None
                 # New location class first
-                location_p = item.find('p', class_='eejmx80')
+                location_p = item.find('span', class_='css-17o293g')
                 if not location_p:
-                    # Old location class
-                    location_p = item.find('p', {'class': 'css-42r2ms'})
+                    location_p = item.find('p', class_='css-42r2ms')
                 if location_p:
                     location = location_p.get_text(strip=True)
                 
