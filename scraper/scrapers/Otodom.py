@@ -34,7 +34,19 @@ class OtodomScraper(BaseScraper):
         print(f"[{self.site_name}] Fetching listings page {page}")
         
         # Updated URL with search[dist] parameter that browsers typically send
-        url = "https://www.otodom.pl/pl/oferty/sprzedaz/mieszkanie/gliwice?limit=72&ownerTypeSingleSelect=ALL&priceMax=300000&areaMin=25&buildYearMin=1950&roomsNumber=%5BTWO%2CTHREE%5D&by=DEFAULT&direction=DESC&viewType=listing&page={page}&search%5Bdist%5D=0"
+        # Build URL from search criteria
+        url = (
+            "https://www.otodom.pl/pl/oferty/sprzedaz/mieszkanie/{location}"
+            "?limit=72&ownerTypeSingleSelect=ALL&priceMax={max_price}"
+            "&areaMin={min_area}&buildYearMin=1950&roomsNumber=%5BTWO%2CTHREE%5D"
+            "&by=DEFAULT&direction=DESC&viewType=listing&page={page}&search%5Bdist%5D=0"
+        ).format(
+            location=search_criteria.get('location', 'gliwice').lower(),
+            max_price=search_criteria.get('max_price', 300000),
+            min_area=search_criteria.get('min_area', 25),
+            page=page
+        )
+        print(f"[{self.site_name}] Constructed URL: {url}")
         
         try:
             # Use FlareSolverr to bypass Cloudflare
@@ -42,8 +54,11 @@ class OtodomScraper(BaseScraper):
                 "cmd": "request.get",
                 "url": url,
                 "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
-                "maxTimeout": 60000
+                "maxTimeout": 60000,
+                "session_ttl": "15m",
+                "cookies": [{"name": "cookieConsent", "value": "1"}]
             }
+            print(f"[{self.site_name}] Sending FlareSolverr payload: {payload}")
             
             response = requests.post(
                 FLARE_SOLVERR_URL,
@@ -54,10 +69,16 @@ class OtodomScraper(BaseScraper):
             response.raise_for_status()
             
             result = response.json()
+            print(f"[{self.site_name}] FlareSolverr response: {result.get('status')}, Duration: {result.get('solution', {}).get('duration')}ms")
+            
             if result.get('status') == 'ok' and 'solution' in result:
+                print(f"[{self.site_name}] Using cookies: {result['solution'].get('cookies')}")
+                print(f"[{self.site_name}] User agent used: {result['solution'].get('userAgent')}")
                 return result['solution']['response']
             
             print(f"[{self.site_name}] FlareSolverr error: {result.get('message')}")
+            print(f"[{self.site_name}] Response headers: {response.headers}")
+            print(f"[{self.site_name}] Response content: {response.text[:500]}")
             return None
         except requests.RequestException as e:
             print(f"[{self.site_name}] Error fetching listings page {page}: {e}")
