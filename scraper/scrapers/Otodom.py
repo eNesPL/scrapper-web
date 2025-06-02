@@ -36,10 +36,9 @@ class OtodomScraper(BaseScraper):
         # Updated URL with search[dist] parameter that browsers typically send
         # Updated URL format with proper encoding
         url = (
-            "https://www.otodom.pl/pl/oferty/sprzedaz/mieszkanie/{location}"
-            "?limit=72&ownerTypeSingleSelect=ALL&priceMax={max_price}"
-            "&areaMin={min_area}&buildYearMin=1950&roomsNumber=TWO%2CTHREE"
-            "&by=DEFAULT&direction=DESC&viewType=listing&page={page}&search[dist]=0"
+            'https://www.otodom.pl/pl/wyniki/sprzedaz/mieszkanie/slaskie/gliwice/gliwice/gliwice?limit=72'
+            '&ownerTypeSingleSelect=ALL&priceMax=300000&areaMin=35&buildYearMin=1950&roomsNumber=%5BTWO%2CTHREE%5D&by'
+            '=DEFAULT&direction=DESC&viewType=listing'
         ).format(
             location=search_criteria.get('location', 'gliwice').lower(),
             max_price=search_criteria.get('max_price', 300000),
