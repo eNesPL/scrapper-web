@@ -7,7 +7,7 @@ from .base_scraper import BaseScraper
 import requests
 # import datetime # If you need to use datetime objects
 
-FLARE_SOLVERR_URL = "http://flaresolverr.e-nes.eu/v1"  # Use HTTP instead of HTTPS
+FLARE_SOLVERR_URL = "https://flaresolverr.e-nes.eu/v1"
 
 class OtodomScraper(BaseScraper):
     """
@@ -54,15 +54,14 @@ class OtodomScraper(BaseScraper):
                 "cmd": "request.get",
                 "url": url,
                 "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
-                "maxTimeout": 120000,  # Increased timeout to 2 minutes
-                "session_ttl": "15m",
-                "cookies": [
-                    {"name": "cookieConsent", "value": "1"}
-                ],
+                "maxTimeout": 60000,
+                "session": "otodom-session",
                 "headers": {
+                    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
                     "Accept-Encoding": "gzip, deflate, br",
                     "Accept-Language": "pl-PL,pl;q=0.9",
-                    "Referer": "https://www.otodom.pl/"
+                    "Referer": "https://www.otodom.pl/",
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36"
                 }
             }
             print(f"[{self.site_name}] Sending FlareSolverr payload to {FLARE_SOLVERR_URL}")
@@ -77,8 +76,7 @@ class OtodomScraper(BaseScraper):
                 )
                 print(f"[{self.site_name}] FlareSolverr ping response: {ping_response.status_code}")
             except Exception as ping_error:
-                print(f"[{self.site_name}] FlareSolverr connection failed: {str(ping_error)}")
-                return None
+                print(f"[{self.site_name}] FlareSolverr ping failed: {str(ping_error)} - proceeding anyway")
 
             # Send request with increased timeout
             response = requests.post(
@@ -88,7 +86,7 @@ class OtodomScraper(BaseScraper):
                     'Connection': 'keep-alive'
                 },
                 json=payload,
-                timeout=300  # Increase timeout to 5 minutes for CloudFront challenge solving
+                timeout=120  # Increased timeout for Cloudflare challenge
             )
             response.raise_for_status()
             
