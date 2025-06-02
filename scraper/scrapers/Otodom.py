@@ -55,40 +55,24 @@ class OtodomScraper(BaseScraper):
                 "url": url,
                 "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
                 "maxTimeout": 60000,
-                "session": "otodom-session",
-                "headers": {
-                    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
-                    "Accept-Encoding": "gzip, deflate, br",
-                    "Accept-Language": "pl-PL,pl;q=0.9",
-                    "Referer": "https://www.otodom.pl/",
-                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36"
-                }
+                "session": "otodom-session"
             }
             print(f"[{self.site_name}] Sending FlareSolverr payload to {FLARE_SOLVERR_URL}")
             
-            # First check if FlareSolverr is reachable
             try:
-                # Add User-Agent to the ping request
-                ping_response = requests.get(
+                # Send request with timeout
+                response = requests.post(
                     FLARE_SOLVERR_URL,
-                    timeout=10,
-                    headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36'}
+                    headers={'Content-Type': 'application/json'},
+                    json=payload,
+                    timeout=60
                 )
-                print(f"[{self.site_name}] FlareSolverr ping response: {ping_response.status_code}")
-            except Exception as ping_error:
-                print(f"[{self.site_name}] FlareSolverr ping failed: {str(ping_error)} - proceeding anyway")
-
-            # Send request with increased timeout
-            response = requests.post(
-                FLARE_SOLVERR_URL,
-                headers={
-                    'Content-Type': 'application/json',
-                    'Connection': 'keep-alive'
-                },
-                json=payload,
-                timeout=120  # Increased timeout for Cloudflare challenge
-            )
-            response.raise_for_status()
+                response.raise_for_status()
+            except requests.RequestException as e:
+                print(f"[{self.site_name}] FlareSolverr request failed: {str(e)}")
+                if hasattr(e, 'response') and e.response:
+                    print(f"[{self.site_name}] FlareSolverr response content: {e.response.text[:500]}")
+                return None
             
             result = response.json()
             print(f"[{self.site_name}] FlareSolverr response: {result.get('status')}, Duration: {result.get('solution', {}).get('duration')}ms")
