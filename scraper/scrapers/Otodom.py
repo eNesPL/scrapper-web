@@ -59,36 +59,47 @@ class OtodomScraper(BaseScraper):
         soup = BeautifulSoup(html_content, 'html.parser')
         listings = []
         
-        for item in soup.find_all('article', {'data-cy': 'listing-item'}):
+        for item in soup.find_all('section', {'data-qa': 'listing-ad'}):
             # Extract URL
-            link = item.find('a', {'data-cy': 'listing-item-link'})
+            link = item.find('a', {
+                'href': lambda href: href and href.startswith('/pl/oferta/'),
+                'class': lambda cls: cls and 'css-1cjusid' in cls
+            })
             if not link or not link.get('href'):
                 continue
                 
             url = link['href']
             if not url.startswith('http'):
                 url = f"https://www.otodom.pl{url}"
-            
+
             # Extract title
             title = link.get_text(strip=True)
             
             # Extract price
-            price_tag = item.find('span', {'class': 'css-2bt9f1'})
-            price = price_tag.get_text(strip=True).replace(' ', '').replace('zł', '').replace(',', '.') if price_tag else None
+            price_tag = item.find('p', {'class': 'css-1bq4suq'}) or item.find('span', {'class': 'css-1bq4suq'})
+            price = None
+            if price_tag:
+                price_text = price_tag.get_text(strip=True).replace(' ', '').replace('zł', '').replace(',', '.')
+                try:
+                    price = float(price_text)
+                except (ValueError, TypeError):
+                    price = None
             
             # Extract area, rooms and other details
             details = {}
-            specs_list = item.find('dl', {'class': 'css-9q2yy4'})
-            if specs_list:
-                for dt, dd in zip(specs_list.find_all('dt'), specs_list.find_all('dd')):
-                    key = dt.get_text(strip=True)
-                    value = dd.get_text(strip=True)
-                    if key == 'Liczba pokoi':
-                        details['rooms'] = value.split()[0]
-                    elif key == 'Powierzchnia':
-                        details['area'] = value.replace('m²', '').strip()
-                    elif key == 'Piętro':
-                        details['floor'] = value
+            details_container = item.find('div', {'class': 'css-1k6vqga e1i9dyua0'})
+            if details_container:
+                for row in details_container.find_all('div', recursive=False):
+                    spans = row.find_all('span')
+                    if len(spans) >= 2:
+                        key = spans[0].get_text(strip=True)
+                        value = spans[1].get_text(strip=True)
+                        if key == 'Liczba pokoi':
+                            details['rooms'] = value
+                        elif key == 'Powierzchnia':
+                            details['area'] = value.replace('m²', '').strip()
+                        elif key == 'Piętro':
+                            details['floor'] = value
             
             # Extract location
             location = item.find('p', {'class': 'css-42r2ms'})
