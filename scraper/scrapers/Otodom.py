@@ -61,29 +61,38 @@ class OtodomScraper(BaseScraper):
         
         for item in soup.find_all('section', {'data-qa': 'listing-ad'}):
             # Extract URL
-            link = item.find('a', {
-                'href': lambda href: href and href.startswith('/pl/oferta/'),
-                'class': lambda cls: cls and 'css-1cjusid' in cls
-            })
+            link = item.find('a', class_='e1i9dyua0')
+            if not link or not link.get('href'):
+                link = item.find('a', href=lambda href: href and href.startswith('/pl/oferta/'))
+            
+            # Skip if still no suitable link
             if not link or not link.get('href'):
                 continue
-                
+            
             url = link['href']
             if not url.startswith('http'):
                 url = f"https://www.otodom.pl{url}"
 
             # Extract title
             title = link.get_text(strip=True)
-            
+            if not title:  # Fallback to other selectors if title not extracted properly
+                title_element = link.find('h2', class_='css-3xzpvd') or link.find('h2')
+                title = title_element.get_text(strip=True) if title_element else title
+                
             # Extract price
-            price_tag = item.find('p', {'class': 'css-1bq4suq'}) or item.find('span', {'class': 'css-1bq4suq'})
+            price_sel1 = item.find('p', class_='css-1bq4suq')
+            price_sel2 = item.find('span', class_='css-1bq4suq')
+            price_sel3 = item.find('p', class_='css-1p8bc7e')
+            price_tag = price_sel1 or price_sel2 or price_sel3
+
             price = None
             if price_tag:
-                price_text = price_tag.get_text(strip=True).replace(' ', '').replace('zł', '').replace(',', '.')
+                price_text = price_tag.get_text(strip=True)\
+                    .replace('zł', '').replace(' ', '').replace(',', '.')
                 try:
                     price = float(price_text)
                 except (ValueError, TypeError):
-                    price = None
+                    pass
             
             # Extract area, rooms and other details
             details = {}
