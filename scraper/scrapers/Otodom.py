@@ -109,23 +109,25 @@ class OtodomScraper(BaseScraper):
         soup = BeautifulSoup(html_content, 'html.parser')
         details = {}
         
-        # Extract price
-        price_elem = soup.find('div', {'data-testid': 'table-value-price'})
-        if price_elem:
-            details['price'] = price_elem.get_text(strip=True)
+        # Extract price - now using the data-cy attribute from header
+        price_elem = soup.find('strong', {'data-cy': 'adPageHeaderPrice'})
+        details['price'] = price_elem.get_text(strip=True) if price_elem else 'Price not available'
+        
+        # Extract area from the property details table
+        area_elem = soup.find('div', {'data-testid': 'table-value-area'})
+        details['area'] = area_elem.get_text(strip=True) if area_elem else 'N/A'
         
         # Extract description
         description_elem = soup.find('div', {'data-cy': 'adPageAdDescription'})
-        if description_elem:
-            details['description'] = description_elem.get_text(strip=True)
+        details['description'] = description_elem.get_text(strip=True) if description_elem else 'No description'
         
-        # Count images
-        images = soup.find_all('picture', {'data-testid': 'picture'})
+        # Count images - more reliable count from gallery container
+        gallery = soup.find('div', {'data-cy': 'mosaic-gallery-main-view'})
+        images = gallery.find_all('img') if gallery else []
         details['image_count'] = len(images)
         
-        # Extract title
+        # Extract title with fallback
         title_elem = soup.find('h1', {'data-cy': 'adPageAdTitle'})
-        if title_elem:
-            details['title'] = title_elem.get_text(strip=True)
+        details['title'] = title_elem.get_text(strip=True) if title_elem else 'Untitled Listing'
         
         return details
