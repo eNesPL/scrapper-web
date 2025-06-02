@@ -28,19 +28,29 @@ class OtodomScraper(BaseScraper):
         :param page: int, page number to fetch (default: 1)
         :return: HTML content (str) or None.
         """
-        import requests
-        from fake_useragent import UserAgent
-        
-        print(f"[{self.site_name}] Fetching listings page {page}")
-        
-        # Updated URL with search[dist] parameter that browsers typically send
-        # Updated URL format with proper encoding
-        url = (
-            'https://www.otodom.pl/pl/wyniki/sprzedaz/mieszkanie/slaskie/gliwice/gliwice/gliwice?limit=72'
-            '&ownerTypeSingleSelect=ALL&priceMax=300000&areaMin=35&buildYearMin=1950&roomsNumber=%5BTWO%2CTHREE%5D&by'
-            '=DEFAULT&direction=DESC&viewType=listing'
-        )
-        print(f"[{self.site_name}] Constructed URL: {url}")
+        try:
+            url = (
+                'https://www.otodom.pl/pl/wyniki/sprzedaz/mieszkanie/slaskie/gliwice/gliwice/gliwice'
+                f'?limit=72&page={page}'
+                '&ownerTypeSingleSelect=ALL&priceMax=300000&areaMin=35&buildYearMin=1950'
+                '&roomsNumber=%5BTWO%2CTHREE%5D&by=DEFAULT&direction=DESC&viewType=listing'
+            )
+            
+            # Use FlareSolverr to bypass anti-bot protection
+            response = requests.post(
+                FLARE_SOLVERR_URL,
+                json={
+                    "cmd": "request.get",
+                    "url": url,
+                    "maxTimeout": 60000
+                }
+            )
+            response.raise_for_status()
+            
+            return response.json()['solution']['response']
+        except Exception as e:
+            print(f"[{self.site_name}] Failed to fetch page {page}: {str(e)}")
+            return None
 
 
     def parse_listings(self, html_content):
@@ -51,7 +61,21 @@ class OtodomScraper(BaseScraper):
                  - listings: List of dictionaries, each with at least a 'url'
                  - has_next_page: bool, whether there are more pages to scrape
         """
-
+        soup = BeautifulSoup(html_content, 'html.parser')
+        listings = []
+        
+        # Find all listing cards
+        for article in soup.find_all('article', {'data-cy': 'listing-item'}):
+            link = article.find('a', {'data-cy': 'listing-item-link'})
+            if link and link.get('href'):
+                listings.append({
+                    'url': 'https://www.otodom.pl' + link['href'],
+                    'title': link.get_text(strip=True) if link else 'No title'
+                })
+        
+        # Check for next page
+        next_page = soup.find('a', {'data-testid': 'pagination-step-next'})
+        has_next_page = next_page is not None and page < self.MAX_PAGES
         
         return listings, has_next_page
 
@@ -61,6 +85,21 @@ class OtodomScraper(BaseScraper):
         :param listing_url: str, URL of the individual listing.
         :return: HTML content (str) or None.
         """
+        try:
+            # Use FlareSolverr to bypass anti-bot protection
+            response = requests.post(
+                FLARE_SOLVERR_URL,
+                json={
+                    "cmd": "request.get",
+                    "url": listing_url,
+                    "maxTimeout": 60000
+                }
+            )
+            response.raise_for_status()
+            return response.json()['solution']['response']
+        except Exception as e:
+            print(f"[{self.site_name}] Failed to fetch listing details: {str(e)}")
+            return None
 
 
     def parse_listing_details(self, html_content):
@@ -70,6 +109,26 @@ class OtodomScraper(BaseScraper):
         :return: Dictionary with detailed property info.
                  Should include 'price', 'description', 'image_count', 'title'.
         """
+        soup = BeautifulSoup(html_content, 'html.parser')
         details = {}
-
+        
+        # Extract price
+        price_elem = soup.find('div', {'data-testid': 'table-value-price'})
+        if price_elem:
+            details['price'] = price_elem.get_text(strip=True)
+        
+        # Extract description
+        description_elem = soup.find('div', {'data-cy': 'adPageAdDescription'})
+        if description_elem:
+            details['description'] = description_elem.get_text(strip=True)
+        
+        # Count images
+        images = soup.find_all('picture', {'data-testid': 'picture'})
+        details['image_count'] = len(images)
+        
+        # Extract title
+        title_elem = soup.find('h1', {'data-cy': 'adPageAdTitle'})
+        if title_elem:
+            details['title'] = title_elem.get_text(strip=True)
+        
         return details
