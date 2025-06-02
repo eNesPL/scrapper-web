@@ -104,9 +104,9 @@ class OtodomScraper(BaseScraper):
                     dts = specs_dl.find_all('dt')
                     dds = specs_dl.find_all('dd')
                     if len(dts) == len(dds):
-                        for i in range(len(dts)):
-                            key = dts[i].get_text(strip=True)
-                            value = dds[i].get_text(strip=True)
+                        for dt, dd in zip(dts, dds):
+                            key = dt.get_text(strip=True)
+                            value = dd.get_text(strip=True)
                             if key == 'Liczba pokoi':
                                 details['rooms'] = value
                             elif key == 'Powierzchnia':
