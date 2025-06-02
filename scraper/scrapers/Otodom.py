@@ -34,12 +34,12 @@ class OtodomScraper(BaseScraper):
         print(f"[{self.site_name}] Fetching listings page {page}")
         
         # Updated URL with search[dist] parameter that browsers typically send
-        # Build URL from search criteria
+        # Updated URL format with proper encoding
         url = (
             "https://www.otodom.pl/pl/oferty/sprzedaz/mieszkanie/{location}"
             "?limit=72&ownerTypeSingleSelect=ALL&priceMax={max_price}"
-            "&areaMin={min_area}&buildYearMin=1950&roomsNumber=%5BTWO%2CTHREE%5D"
-            "&by=DEFAULT&direction=DESC&viewType=listing&page={page}&search%5Bdist%5D=0"
+            "&areaMin={min_area}&buildYearMin=1950&roomsNumber=TWO%2CTHREE"
+            "&by=DEFAULT&direction=DESC&viewType=listing&page={page}&search[dist]=0"
         ).format(
             location=search_criteria.get('location', 'gliwice').lower(),
             max_price=search_criteria.get('max_price', 300000),
@@ -123,28 +123,40 @@ class OtodomScraper(BaseScraper):
         listings = []
         
         # Enhanced listing container detection
+        # Try multiple container selectors with updated classes
         listings_container = soup.select_one(
-            'div[data-cy="search.listing"] ul, '
+            'div[data-cy="search.listing"], '
             'ul[data-cy="search.listing"], '
-            'div[data-testid="search.listing"]'
+            'div[data-testid="search.listing"], '
+            'div.css-1sjczni, '
+            'ul.css-1j2p3tj'
         )
         
         if not listings_container:
             print(f"[{self.site_name}] ⚠️ No listings container found in HTML")
+            if "Request blocked" in str(soup):
+                print(f"[{self.site_name}] Cloudflare block detected in response")
             with open('no_listings_container.html', 'w', encoding='utf-8') as f:
                 f.write(str(soup))
             return [], False
             
-        items = listings_container.select('li:has(a[href*="/pl/oferta/"])')
+        # More flexible item selector with updated classes
+        items = listings_container.select('li:has(a[href*="/pl/oferta/"]), article:has(a[href*="/pl/oferta/"])')
         print(f"[{self.site_name}] Found {len(items)} potential listing elements")
         
         for item in items:
             try:
                 # Extract URL - new selector
-                link = item.select_one('a[data-cy="listing-item-link"]')
+                # Try multiple link selectors with updated classes
+                link = item.select_one(
+                    'a[data-cy="listing-item-link"], '
+                    'a.css-1upf6v4, '
+                    'a.css-1s5s5tw'
+                )
                 
                 # Skip if still no suitable link
                 if not link or not link.get('href'):
+                    print(f"[{self.site_name}] No valid link found in listing item")
                     continue
                 
                 url = link['href']
