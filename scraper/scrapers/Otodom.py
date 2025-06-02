@@ -394,10 +394,21 @@ class OtodomScraper(BaseScraper):
                 if area_match:
                     params['Powierzchnia'] = area_match.group(1).replace(',', '.')
 
-        # Extract and standardize area - first from dedicated params
-        area_str = (params.get('Powierzchnia') or 
-                    params.get('Powierzchni') or
-                    params.get('Metraż'))
+        # Extract and standardize area with fallbacks
+        area_str = None
+        try:
+            area_str = (params.get('Powierzchnia') or 
+                        params.get('Powierzchni') or
+                        params.get('Metraż') or
+                        params.get('surface'))
+                    
+            # If still not found, try to extract from description
+            if not area_str and 'description' in details:
+                area_match = re.search(r'(\d+[\.,]\d+|\d+)\s?m²?', details['description'])
+                if area_match:
+                    area_str = area_match.group(1)
+        except (KeyError, IndexError) as e:
+            print(f"[{self.site_name}] Error extracting area: {str(e)}")
         if area_str:
             try:
                 details['area_m2'] = float(area_str.replace('m²', '').replace(',', '.').strip())
@@ -417,10 +428,16 @@ class OtodomScraper(BaseScraper):
                     except (ValueError, TypeError):
                         pass
         
-        # Rooms
-        rooms_str = (params.get('Liczba pokoi') or 
-                    params.get('Liczba pokoji') or
-                    params.get('Pokoje'))
+        # Rooms with better error handling
+        rooms_str = None
+        try:
+            rooms_str = (params.get('Liczba pokoi') or 
+                        params.get('Liczba pokoji') or
+                        params.get('Pokoje') or
+                        params.get('rooms') or
+                        params.get('room_count'))
+        except (KeyError, IndexError) as e:
+            print(f"[{self.site_name}] Error extracting rooms: {str(e)}")
         if rooms_str:
             try:
                 if '-' in rooms_str:
@@ -441,8 +458,12 @@ class OtodomScraper(BaseScraper):
                     except (ValueError, TypeError):
                         pass
         
-        # Floor
-        floor_str = params.get('Piętro')
+        # Floor with null handling
+        floor_str = None
+        try:
+            floor_str = params.get('Piętro') or params.get('floor')
+        except (KeyError, IndexError) as e:
+            print(f"[{self.site_name}] Error extracting floor: {str(e)}")
         if floor_str:
             try:
                 # Handle format like "parter/2"
