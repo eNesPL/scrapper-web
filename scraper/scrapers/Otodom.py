@@ -100,8 +100,23 @@ class OtodomScraper(BaseScraper):
         soup = BeautifulSoup(html_content, 'html.parser')
         listings = []
         
-        # New listing container selector
-        for item in soup.select('article[data-cy="listing-item"], div[data-testid="listing-item"]'):
+        # Enhanced listing container detection
+        listings_container = soup.select_one(
+            'div[data-cy="search.listing"] ul, '
+            'ul[data-cy="search.listing"], '
+            'div[data-testid="search.listing"]'
+        )
+        
+        if not listings_container:
+            print(f"[{self.site_name}] ⚠️ No listings container found in HTML")
+            with open('no_listings_container.html', 'w', encoding='utf-8') as f:
+                f.write(str(soup))
+            return [], False
+            
+        items = listings_container.select('li:has(a[href*="/pl/oferta/"])')
+        print(f"[{self.site_name}] Found {len(items)} potential listing elements")
+        
+        for item in items:
             try:
                 # Extract URL - new selector
                 link = item.select_one('a[data-cy="listing-item-link"]')
@@ -194,9 +209,23 @@ class OtodomScraper(BaseScraper):
                 print(traceback.format_exc())
                 continue
             
-        # Check for next page button
-        next_page_button = soup.find('a', {'data-cy': 'pagination.next-page'})
-        has_next_page = next_page_button is not None and len(listings) > 0
+        # Improved next page detection
+        next_page_button = soup.find('a', {
+            'aria-label': lambda x: x and 'następna' in x.lower() or 'next' in x.lower()
+        })
+        
+        has_next_page = False
+        if next_page_button:
+            has_next_page = 'disabled' not in next_page_button.get('class', []) \
+                            and 'href' in next_page_button.attrs \
+                            and 'page=' in next_page_button['href']
+            
+            print(f"[{self.site_name}] Next page analysis:")
+            print(f" - Classes: {next_page_button.get('class', [])}")
+            print(f" - Href: {next_page_button.get('href', '')}")
+            print(f" - Disabled: {'disabled' in next_page_button.get('class', [])}")
+        
+        print(f"[{self.site_name}] Next page available: {has_next_page}")
         
         return listings, has_next_page
 
