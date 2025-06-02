@@ -7,7 +7,7 @@ from .base_scraper import BaseScraper
 import requests
 # import datetime # If you need to use datetime objects
 
-FLARE_SOLVERR_URL = "https://flaresolverr.e-nes.eu/v1"
+FLARE_SOLVERR_URL = "http://flaresolverr.e-nes.eu/v1"  # Use HTTP instead of HTTPS
 
 class OtodomScraper(BaseScraper):
     """
@@ -57,8 +57,7 @@ class OtodomScraper(BaseScraper):
                 "maxTimeout": 120000,  # Increased timeout to 2 minutes
                 "session_ttl": "15m",
                 "cookies": [
-                    {"name": "cookieConsent", "value": "1"},
-                    {"name": "cf_clearance", "value": "YOUR_CF_CLEARANCE_COOKIE"}
+                    {"name": "cookieConsent", "value": "1"}
                 ],
                 "headers": {
                     "Accept-Encoding": "gzip, deflate, br",
@@ -70,7 +69,12 @@ class OtodomScraper(BaseScraper):
             
             # First check if FlareSolverr is reachable
             try:
-                ping_response = requests.get(FLARE_SOLVERR_URL, timeout=10)
+                # Add User-Agent to the ping request
+                ping_response = requests.get(
+                    FLARE_SOLVERR_URL,
+                    timeout=10,
+                    headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36'}
+                )
                 print(f"[{self.site_name}] FlareSolverr ping response: {ping_response.status_code}")
             except Exception as ping_error:
                 print(f"[{self.site_name}] FlareSolverr connection failed: {str(ping_error)}")
@@ -84,7 +88,7 @@ class OtodomScraper(BaseScraper):
                     'Connection': 'keep-alive'
                 },
                 json=payload,
-                timeout=120  # Match maxTimeout value
+                timeout=300  # Increase timeout to 5 minutes for CloudFront challenge solving
             )
             response.raise_for_status()
             
