@@ -30,10 +30,7 @@ class OtodomScraper(BaseScraper):
         """
         try:
             url = (
-                'https://www.otodom.pl/pl/wyniki/sprzedaz/mieszkanie/slaskie/gliwice/gliwice/gliwice'
-                f'?limit=72&page={page}'
-                '&ownerTypeSingleSelect=ALL&priceMax=300000&areaMin=35&buildYearMin=1950'
-                '&roomsNumber=%5BTWO%2CTHREE%5D&by=DEFAULT&direction=DESC&viewType=listing'
+                'https://www.otodom.pl/pl/wyniki/sprzedaz/mieszkanie/slaskie/gliwice/gliwice/gliwice?limit=72&ownerTypeSingleSelect=ALL&priceMax=300000&areaMin=35&buildYearMin=1950&roomsNumber=%5BTWO%2CTHREE%5D&floors=%5BGROUND%2CFIRST%5D&by=DEFAULT&direction=DESC&viewType=listing'
             )
             
             # Use FlareSolverr to bypass anti-bot protection
@@ -42,7 +39,7 @@ class OtodomScraper(BaseScraper):
                 json={
                     "cmd": "request.get",
                     "url": url,
-                    "maxTimeout": 60000
+                    "maxTimeout": 120000
                 }
             )
             response.raise_for_status()
@@ -53,7 +50,7 @@ class OtodomScraper(BaseScraper):
             return None
 
 
-    def parse_listings(self, html_content):
+    def parse_listings(self, html_content, page=1):
         """
         Parses the listings page HTML to extract individual listing URLs or summary data.
         :param html_content: str, HTML content of the listings page.
