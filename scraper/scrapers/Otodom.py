@@ -255,35 +255,66 @@ class OtodomScraper(BaseScraper):
                 if area_match:
                     params['Powierzchnia'] = area_match.group(1).replace(',', '.')
 
-        # Extract and standardize important parameters
-        def clean_area(area_str):
-            if not area_str:
-                return None
+        # Extract and standardize area - first from dedicated params
+        area_str = (params.get('Powierzchnia') or 
+                    params.get('Powierzchni') or
+                    params.get('Metraż'))
+        if area_str:
             try:
-                return float(area_str.replace('m²', '').replace(',', '.').strip())
+                details['area_m2'] = float(area_str.replace('m²', '').replace(',', '.').strip())
             except (ValueError, TypeError):
-                return None
-
-        def clean_rooms(rooms_str):
-            if not rooms_str:
-                return None
+                pass
+        
+        # Fallback to title-based area
+        if not details.get('area_m2') or details['area_m2'] <= 0:
+            # Extract all numbers from title
+            title = details.get('title', '')
+            if title:
+                area_match = re.search(r'(\d+[\.,]\d+|\d+)\s?m', title)
+                if area_match:
+                    area_str = area_match.group(1).replace(',', '.').strip()
+                    try:
+                        details['area_m2'] = float(area_str)
+                    except (ValueError, TypeError):
+                        pass
+        
+        # Rooms
+        rooms_str = (params.get('Liczba pokoi') or 
+                    params.get('Liczba pokoji') or
+                    params.get('Pokoje'))
+        if rooms_str:
             try:
-                return int(rooms_str.split()[0])
+                if '-' in rooms_str:
+                    # Handle ranges: take first number
+                    rooms_str = rooms_str.split('-')[0]
+                elif '+' in rooms_str:
+                    rooms_str = rooms_str.split('+')[0]
+                details['rooms'] = int(re.sub(r'\D', '', rooms_str))
             except (ValueError, TypeError):
-                return None
-
-        # Try multiple possible parameter names
-        details['area_m2'] = clean_area(
-            params.get('Powierzchnia') or 
-            params.get('Powierzchni') or
-            params.get('Metraż')
-        )
-        details['rooms'] = clean_rooms(
-            params.get('Liczba pokoi') or 
-            params.get('Liczba pokoji') or
-            params.get('Pokoje')
-        )
-        details['floor'] = params.get('Piętro', 'N/A').split('/')[0].strip()  # Handle format like "parter/2"
+                pass
+        if not details.get('rooms') or details['rooms'] <= 0:
+            title = details.get('title', '')
+            if title:
+                rooms_match = re.search(r'(\d+)\s?poko[jiełyes]+', title, re.IGNORECASE)
+                if rooms_match:
+                    try:
+                        details['rooms'] = int(rooms_match.group(1))
+                    except (ValueError, TypeError):
+                        pass
+        
+        # Floor
+        floor_str = params.get('Piętro')
+        if floor_str:
+            try:
+                # Handle format like "parter/2"
+                floor_parts = floor_str.split('/')
+                if floor_parts:
+                    if floor_parts[0].strip().lower() == 'parter':
+                        details['floor'] = 0
+                    else:
+                        details['floor'] = int(floor_parts[0].strip())
+            except (ValueError, TypeError):
+                pass
 
         # Extract all images and main image
         image_tags = []
