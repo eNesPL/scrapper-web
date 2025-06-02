@@ -96,22 +96,46 @@ class OtodomScraper(BaseScraper):
             
             # Extract area, rooms and other details
             details = {}
-            details_container = item.find('div', {'class': 'css-1k6vqga e1i9dyua0'})
-            if details_container:
-                for row in details_container.find_all('div', recursive=False):
-                    spans = row.find_all('span')
-                    if len(spans) >= 2:
-                        key = spans[0].get_text(strip=True)
-                        value = spans[1].get_text(strip=True)
+            # Try new specs list format
+            specs_dl = item.find('dl')
+            if specs_dl:
+                dts = specs_dl.find_all('dt')
+                dds = specs_dl.find_all('dd')
+                if len(dts) == len(dds):
+                    for i in range(len(dts)):
+                        key = dts[i].get_text(strip=True)
+                        value = dds[i].get_text(strip=True)
                         if key == 'Liczba pokoi':
                             details['rooms'] = value
                         elif key == 'Powierzchnia':
                             details['area'] = value.replace('m²', '').strip()
                         elif key == 'Piętro':
                             details['floor'] = value
+            else:
+                # Fall back to old container format
+                details_container = item.find('div', {'class': 'css-1k6vqga e1i9dyua0'})
+                if details_container:
+                    for row in details_container.find_all('div', recursive=False):
+                        spans = row.find_all('span')
+                        if len(spans) >= 2:
+                            key = spans[0].get_text(strip=True)
+                            value = spans[1].get_text(strip=True)
+                            if key == 'Liczba pokoi':
+                                details['rooms'] = value
+                            elif key == 'Powierzchnia':
+                                details['area'] = value.replace('m²', '').strip()
+                            elif key == 'Piętro':
+                                details['floor'] = value
             
-            # Extract location
-            location = item.find('p', {'class': 'css-42r2ms'})
+            # Extract locations safely
+            location = None
+            # New location class first
+            location_p = item.find('p', class_='eejmx80')
+            if not location_p:
+                # Old location class
+                location_p = item.find('p', {'class': 'css-42r2ms'})
+            if location_p:
+                location = location_p.get_text(strip=True)
             
             listing_data = {
                 'url': url,
