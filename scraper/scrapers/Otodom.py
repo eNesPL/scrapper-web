@@ -1,4 +1,5 @@
 import re
+import traceback
 import requests
 from fake_useragent import UserAgent
 from bs4 import BeautifulSoup
@@ -60,95 +61,100 @@ class OtodomScraper(BaseScraper):
         listings = []
         
         for item in soup.find_all('section', {'data-qa': 'listing-ad'}):
-            # Extract URL
-            link = item.find('a', class_='e1i9dyua0')
-            if not link or not link.get('href'):
-                link = item.find('a', href=lambda href: href and href.startswith('/pl/oferta/'))
-            
-            # Skip if still no suitable link
-            if not link or not link.get('href'):
-                continue
-            
-            url = link['href']
-            if not url.startswith('http'):
-                url = f"https://www.otodom.pl{url}"
-
-            # Extract title
-            title = link.get_text(strip=True)
-            if not title:  # Fallback to other selectors if title not extracted properly
-                title_element = link.find('h2', class_='css-3xzpvd') or link.find('h2')
-                title = title_element.get_text(strip=True) if title_element else title
+            try:
+                # Extract URL
+                link = item.find('a', class_='e1i9dyua0')
+                if not link or not link.get('href'):
+                    link = item.find('a', href=lambda href: href and href.startswith('/pl/oferta/'))
                 
-            # Extract price
-            price_sel1 = item.find('p', class_='css-1bq4suq')
-            price_sel2 = item.find('span', class_='css-1bq4suq')
-            price_sel3 = item.find('p', class_='css-1p8bc7e')
-            price_tag = price_sel1 or price_sel2 or price_sel3
+                # Skip if still no suitable link
+                if not link or not link.get('href'):
+                    continue
+                
+                url = link['href']
+                if not url.startswith('http'):
+                    url = f"https://www.otodom.pl{url}"
 
-            price = None
-            if price_tag:
-                price_text = price_tag.get_text(strip=True)\
-                    .replace('zł', '').replace(' ', '').replace(',', '.')
-                try:
-                    price = float(price_text)
-                except (ValueError, TypeError):
-                    pass
-            
-            # Extract area, rooms and other details
-            details = {}
-            # Try new specs list format
-            specs_dl = item.find('dl')
-            if specs_dl:
-                dts = specs_dl.find_all('dt')
-                dds = specs_dl.find_all('dd')
-                if len(dts) == len(dds):
-                    for i in range(len(dts)):
-                        key = dts[i].get_text(strip=True)
-                        value = dds[i].get_text(strip=True)
-                        if key == 'Liczba pokoi':
-                            details['rooms'] = value
-                        elif key == 'Powierzchnia':
-                            details['area'] = value.replace('m²', '').strip()
-                        elif key == 'Piętro':
-                            details['floor'] = value
-            else:
-                # Fall back to old container format
-                details_container = item.find('div', {'class': 'css-1k6vqga e1i9dyua0'})
-                if details_container:
-                    for row in details_container.find_all('div', recursive=False):
-                        spans = row.find_all('span')
-                        if len(spans) >= 2:
-                            key = spans[0].get_text(strip=True)
-                            value = spans[1].get_text(strip=True)
+                # Extract title
+                title = link.get_text(strip=True)
+                if not title:  # Fallback to other selectors if title not extracted properly
+                    title_element = link.find('h2', class_='css-3xzpvd') or link.find('h2')
+                    title = title_element.get_text(strip=True) if title_element else title
+                    
+                # Extract price
+                price_sel1 = item.find('p', class_='css-1bq4suq')
+                price_sel2 = item.find('span', class_='css-1bq4suq')
+                price_sel3 = item.find('p', class_='css-1p8bc7e')
+                price_tag = price_sel1 or price_sel2 or price_sel3
+
+                price = None
+                if price_tag:
+                    price_text = price_tag.get_text(strip=True)\
+                        .replace('zł', '').replace(' ', '').replace(',', '.')
+                    try:
+                        price = float(price_text)
+                    except (ValueError, TypeError):
+                        pass
+                
+                # Extract area, rooms and other details
+                details = {}
+                # Try new specs list format
+                specs_dl = item.find('dl')
+                if specs_dl:
+                    dts = specs_dl.find_all('dt')
+                    dds = specs_dl.find_all('dd')
+                    if len(dts) == len(dds):
+                        for i in range(len(dts)):
+                            key = dts[i].get_text(strip=True)
+                            value = dds[i].get_text(strip=True)
                             if key == 'Liczba pokoi':
                                 details['rooms'] = value
                             elif key == 'Powierzchnia':
                                 details['area'] = value.replace('m²', '').strip()
                             elif key == 'Piętro':
                                 details['floor'] = value
-            
-            # Extract locations safely
-            location = None
-            # New location class first
-            location_p = item.find('p', class_='eejmx80')
-            if not location_p:
-                # Old location class
-                location_p = item.find('p', {'class': 'css-42r2ms'})
-            if location_p:
-                location = location_p.get_text(strip=True)
-            
-            listing_data = {
-                'url': url,
-                'title': title,
-                'price': price,
-                'rooms': details.get('rooms'),
-                'area_m2': details.get('area'),
-                'floor': details.get('floor'),
-                'price_per_m2': details.get('price_per_m2'),
-                'location': location.get_text(strip=True) if location else None,
-                'site_name': self.site_name
-            }
-            listings.append(listing_data)
+                else:
+                    # Fall back to old container format
+                    details_container = item.find('div', {'class': 'css-1k6vqga e1i9dyua0'})
+                    if details_container:
+                        for row in details_container.find_all('div', recursive=False):
+                            spans = row.find_all('span')
+                            if len(spans) >= 2:
+                                key = spans[0].get_text(strip=True)
+                                value = spans[1].get_text(strip=True)
+                                if key == 'Liczba pokoi':
+                                    details['rooms'] = value
+                                elif key == 'Powierzchnia':
+                                    details['area'] = value.replace('m²', '').strip()
+                                elif key == 'Piętro':
+                                    details['floor'] = value
+                
+                # Extract locations safely
+                location = None
+                # New location class first
+                location_p = item.find('p', class_='eejmx80')
+                if not location_p:
+                    # Old location class
+                    location_p = item.find('p', {'class': 'css-42r2ms'})
+                if location_p:
+                    location = location_p.get_text(strip=True)
+                
+                listing_data = {
+                    'url': url,
+                    'title': title,
+                    'price': price,
+                    'rooms': details.get('rooms'),
+                    'area_m2': details.get('area'),
+                    'floor': details.get('floor'),
+                    'price_per_m2': details.get('price_per_m2'),
+                    'location': location,   # location is already a string (or None)
+                    'site_name': self.site_name
+                }
+                listings.append(listing_data)
+            except Exception as e:
+                print(f"[{self.site_name}] Error processing listing: {e}")
+                print(traceback.format_exc())
+                continue
             
         # Check for next page button
         next_page_button = soup.find('a', {'data-cy': 'pagination.next-page'})
