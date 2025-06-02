@@ -129,7 +129,10 @@ class OtodomScraper(BaseScraper):
             'ul[data-cy="search.listing"], '
             'div[data-testid="search.listing"], '
             'div.css-1sjczni, '
-            'ul.css-1j2p3tj'
+            'ul.css-1j2p3tj, '
+            'div.css-1q6l4jt, '
+            'div[class*="listing"], '
+            'ul[class*="listing"]'
         )
         
         if not listings_container:
@@ -141,7 +144,12 @@ class OtodomScraper(BaseScraper):
             return [], False
             
         # More flexible item selector with updated classes
-        items = listings_container.select('li:has(a[href*="/pl/oferta/"]), article:has(a[href*="/pl/oferta/"])')
+        items = listings_container.select(
+            'li:has(a[href*="/pl/oferta/"]), '
+            'article:has(a[href*="/pl/oferta/"]), '
+            'div[data-cy="listing-item"], '
+            'div.css-1nupfq7'
+        )
         print(f"[{self.site_name}] Found {len(items)} potential listing elements")
         
         for item in items:
@@ -150,8 +158,9 @@ class OtodomScraper(BaseScraper):
                 # Try multiple link selectors with updated classes
                 link = item.select_one(
                     'a[data-cy="listing-item-link"], '
+                    'a.css-1s5s5tw, '
                     'a.css-1upf6v4, '
-                    'a.css-1s5s5tw'
+                    'a[href*="/pl/oferta/"]'
                 )
                 
                 # Skip if still no suitable link
@@ -171,7 +180,12 @@ class OtodomScraper(BaseScraper):
                     
                 # Extract price
                 # New price selector
-                price_tag = item.select_one('span[data-cy="price"], p[data-testid="ad-price"]')
+                price_tag = item.select_one(
+                    'span[data-cy="price"], '
+                    'div[data-cy="price"], '
+                    'p[data-testid="ad-price"], '
+                    'div.css-1q9qal6'
+                )
 
                 price = None
                 if price_tag:
@@ -186,10 +200,14 @@ class OtodomScraper(BaseScraper):
                 details = {}
                 # Try new specs list format
                 # New details selector
-                specs_dl = item.select_one('div[data-testid="ad-card-details"]')
+                specs_dl = item.select_one(
+                    'div[data-testid="ad-card-details"], '
+                    'div.css-1ji7bvd, '
+                    'div[data-cy="ad-card-details"]'
+                )
                 if specs_dl:
-                    dts = specs_dl.select('div > p:first-child')
-                    dds = specs_dl.select('div > p:last-child')
+                    dts = specs_dl.select('div > div > p:first-child, div > span:first-child')
+                    dds = specs_dl.select('div > div > p:last-child, div > span:last-child')
                     if len(dts) == len(dds):
                         for dt, dd in zip(dts, dds):
                             key = dt.get_text(strip=True)
