@@ -35,10 +35,25 @@ class OtodomScraper(BaseScraper):
         
         try:
             headers = {
-                'User-Agent': UserAgent(use_cache_server=False).random,
-                'Accept-Language': 'pl-PL,pl;q=0.9'
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
+                'Accept-Language': 'pl-PL,pl;q=0.9',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+                'Accept-Encoding': 'gzip, deflate, br',
+                'Connection': 'keep-alive',
+                'Referer': 'https://www.otodom.pl/',
+                'Sec-Fetch-Dest': 'document',
+                'Sec-Fetch-Mode': 'navigate',
+                'Sec-Fetch-Site': 'same-origin',
+                'Sec-Fetch-User': '?1',
+                'Upgrade-Insecure-Requests': '1'
             }
-            response = requests.get(url, headers=headers, timeout=10)
+            
+            # Use session to maintain cookies
+            with requests.Session() as session:
+                session.headers.update(headers)
+                # Add initial navigation to simulate browser behavior
+                session.get("https://www.otodom.pl/", timeout=10)
+                response = session.get(url, timeout=15)
             response.raise_for_status()
             return response.text
         except requests.RequestException as e:
