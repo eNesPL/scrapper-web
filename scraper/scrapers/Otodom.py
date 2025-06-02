@@ -233,7 +233,7 @@ class OtodomScraper(BaseScraper):
             
         # Improved next page detection
         next_page_button = soup.find('a', {
-            'aria-label': lambda x: x and 'następna' in x.lower() or 'next' in x.lower()
+            'aria-label': lambda x: x and ('następna' in x.lower() or 'next' in x.lower())
         })
         
         has_next_page = False
