@@ -4,7 +4,10 @@ import requests
 from fake_useragent import UserAgent
 from bs4 import BeautifulSoup
 from .base_scraper import BaseScraper
+import requests
 # import datetime # If you need to use datetime objects
+
+FLARE_SOLVERR_URL = "http://flaresolverr.e-nes.eu/v1"
 
 class OtodomScraper(BaseScraper):
     """
@@ -34,28 +37,28 @@ class OtodomScraper(BaseScraper):
         url = "https://www.otodom.pl/pl/oferty/sprzedaz/mieszkanie/gliwice?limit=72&ownerTypeSingleSelect=ALL&priceMax=300000&areaMin=25&buildYearMin=1950&roomsNumber=%5BTWO%2CTHREE%5D&by=DEFAULT&direction=DESC&viewType=listing&page={page}&search%5Bdist%5D=0"
         
         try:
-            headers = {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
-                'Accept-Language': 'pl-PL,pl;q=0.9',
-                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
-                'Accept-Encoding': 'gzip, deflate, br',
-                'Connection': 'keep-alive',
-                'Referer': 'https://www.otodom.pl/',
-                'Sec-Fetch-Dest': 'document',
-                'Sec-Fetch-Mode': 'navigate',
-                'Sec-Fetch-Site': 'same-origin',
-                'Sec-Fetch-User': '?1',
-                'Upgrade-Insecure-Requests': '1'
+            # Use FlareSolverr to bypass Cloudflare
+            payload = {
+                "cmd": "request.get",
+                "url": url,
+                "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
+                "maxTimeout": 60000
             }
             
-            # Use session to maintain cookies
-            with requests.Session() as session:
-                session.headers.update(headers)
-                # Add initial navigation to simulate browser behavior
-                session.get("https://www.otodom.pl/", timeout=10)
-                response = session.get(url, timeout=15)
+            response = requests.post(
+                FLARE_SOLVERR_URL,
+                headers={'Content-Type': 'application/json'},
+                json=payload,
+                timeout=60
+            )
             response.raise_for_status()
-            return response.text
+            
+            result = response.json()
+            if result.get('status') == 'ok' and 'solution' in result:
+                return result['solution']['response']
+            
+            print(f"[{self.site_name}] FlareSolverr error: {result.get('message')}")
+            return None
         except requests.RequestException as e:
             print(f"[{self.site_name}] Error fetching listings page {page}: {e}")
             return None
@@ -76,12 +79,11 @@ class OtodomScraper(BaseScraper):
         soup = BeautifulSoup(html_content, 'html.parser')
         listings = []
         
-        for item in soup.find_all('section', {'data-qa': 'listing-ad'}):
+        # New listing container selector
+        for item in soup.select('article[data-cy="listing-item"], div[data-testid="listing-item"]'):
             try:
-                # Extract URL
-                link = item.find('a', class_='e1i9dyua0')
-                if not link or not link.get('href'):
-                    link = item.find('a', href=lambda href: href and href.startswith('/pl/oferta/'))
+                # Extract URL - new selector
+                link = item.select_one('a[data-cy="listing-item-link"]')
                 
                 # Skip if still no suitable link
                 if not link or not link.get('href'):
@@ -98,10 +100,8 @@ class OtodomScraper(BaseScraper):
                     title = title_element.get_text(strip=True) if title_element else title
                     
                 # Extract price
-                price_sel1 = item.find('p', class_='css-1bq4suq')
-                price_sel2 = item.find('span', class_='css-1bq4suq')
-                price_sel3 = item.find('p', class_='css-1p8bc7e')
-                price_tag = price_sel1 or price_sel2 or price_sel3
+                # New price selector
+                price_tag = item.select_one('span[data-cy="price"], p[data-testid="ad-price"]')
 
                 price = None
                 if price_tag:
@@ -115,10 +115,11 @@ class OtodomScraper(BaseScraper):
                 # Extract area, rooms and other details
                 details = {}
                 # Try new specs list format
-                specs_dl = item.find('dl')
+                # New details selector
+                specs_dl = item.select_one('div[data-testid="ad-card-details"]')
                 if specs_dl:
-                    dts = specs_dl.find_all('dt')
-                    dds = specs_dl.find_all('dd')
+                    dts = specs_dl.select('div > p:first-child')
+                    dds = specs_dl.select('div > p:last-child')
                     if len(dts) == len(dds):
                         for dt, dd in zip(dts, dds):
                             key = dt.get_text(strip=True)
