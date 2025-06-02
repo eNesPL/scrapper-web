@@ -30,7 +30,8 @@ class OtodomScraper(BaseScraper):
         
         print(f"[{self.site_name}] Fetching listings page {page}")
         
-        url = "https://www.otodom.pl/pl/oferty/sprzedaz/mieszkanie/gliwice?limit=72&ownerTypeSingleSelect=ALL&priceMax=300000&areaMin=25&buildYearMin=1950&roomsNumber=%5BTWO%2CTHREE%5D&by=DEFAULT&direction=DESC&viewType=listing&page={page}"
+        # Updated URL with search[dist] parameter that browsers typically send
+        url = "https://www.otodom.pl/pl/oferty/sprzedaz/mieszkanie/gliwice?limit=72&ownerTypeSingleSelect=ALL&priceMax=300000&areaMin=25&buildYearMin=1950&roomsNumber=%5BTWO%2CTHREE%5D&by=DEFAULT&direction=DESC&viewType=listing&page={page}&search%5Bdist%5D=0"
         
         try:
             headers = {
