@@ -110,9 +110,8 @@ class OtodomScraper(BaseScraper):
                     
                 return content
             except Exception as e:
-                print(f"[{self.site_name}] Attempt {attempt+1}/{max_retries} failed: {str(e)}")
                 if attempt == max_retries - 1:
-                    print(f"[{self.site_name}] All attempts failed for {listing_url}")
+                    print(f"[{self.site_name}] Failed to fetch listing after {max_retries} attempts: {listing_url}")
                     return None
 
 
