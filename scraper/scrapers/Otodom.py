@@ -39,7 +39,12 @@ class OtodomScraper(BaseScraper):
                 json={
                     "cmd": "request.get",
                     "url": url,
-                    "maxTimeout": 120000
+                    "session": "otodom_session",
+                    "maxTimeout": 180000,
+                    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
+                    "proxy": {
+                        "url": os.getenv('PROXY_URL')
+                    }
                 }
             )
             response.raise_for_status()
@@ -91,7 +96,12 @@ class OtodomScraper(BaseScraper):
                     json={
                         "cmd": "request.get",
                         "url": listing_url,
-                        "maxTimeout": 60000
+                        "session": "otodom_session",
+                        "maxTimeout": 120000,
+                        "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
+                        "proxy": {
+                            "url": os.getenv('PROXY_URL')  # Optional proxy if needed
+                        }
                     }
                 )
                 response.raise_for_status()
