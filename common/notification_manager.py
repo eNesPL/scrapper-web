@@ -134,7 +134,19 @@ class NotificationManager:
                     "inline": True
                 })
             else:
-                change_desc = f"**{field.replace('_', ' ').title()}**: `{old_value}` → `{new_value}`"
+                # Special handling for description changes
+                if field == 'description':
+                    # Clean both values before comparison
+                    clean_old = old_value.strip(' →`').replace('...', '').strip()
+                    clean_new = new_value.strip(' →`').replace('...', '').strip()
+                    
+                    # Only show change if there's a meaningful difference
+                    if clean_old != clean_new:
+                        change_desc = f"**Description Updated**\n- Before: {clean_old[:150]}...\n- After: {clean_new[:150]}..."
+                    else:
+                        continue  # Skip insignificant changes
+                else:
+                    change_desc = f"**{field.replace('_', ' ').title()}**: `{old_value}` → `{new_value}`"
             change_descriptions.append(change_desc)
 
 
