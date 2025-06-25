@@ -1,5 +1,6 @@
 import re
 import traceback
+import os
 import requests
 from fake_useragent import UserAgent
 from bs4 import BeautifulSoup
