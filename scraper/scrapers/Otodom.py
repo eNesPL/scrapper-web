@@ -41,11 +41,7 @@ class OtodomScraper(BaseScraper):
                     "cmd": "request.get",
                     "url": url,
                     "session": "otodom_session",
-                    "maxTimeout": 180000,
-                    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
-                    "proxy": {
-                        "url": os.getenv('PROXY_URL')
-                    }
+                    "maxTimeout": 180000
                 }
             )
             response.raise_for_status()
