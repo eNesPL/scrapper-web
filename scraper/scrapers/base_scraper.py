@@ -112,9 +112,12 @@ class BaseScraper(ABC):
 
                 detailed_data = self.parse_listing_details(details_page_html)
                 if not detailed_data:
-                    print(f"[{self.site_name}] Failed to parse details for {listing_url}. Skipping.")
-                    if self.db_manager.get_listing_by_url(listing_url):
-                        self.db_manager.update_last_checked(listing_url)
+                    print(f"[{self.site_name}] Failed to parse valid details for {listing_url}. Skipping update.")
+                    continue  # Don't update database with partial data
+                
+                # Validate critical fields before proceeding
+                if not detailed_data.get('price') or not any(c.isdigit() for c in str(detailed_data.get('price', ''))):
+                    print(f"[{self.site_name}] Invalid price data for {listing_url}. Skipping.")
                     continue
                 
                 current_listing_data = {

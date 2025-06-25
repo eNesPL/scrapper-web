@@ -78,48 +78,69 @@ class OtodomScraper(BaseScraper):
 
     def fetch_listing_details_page(self, listing_url):
         """
-        Fetches an individual listing's detail page HTML from Otodom.pl.
+        Fetches an individual listing's detail page HTML from Otodom.pl with retries.
         :param listing_url: str, URL of the individual listing.
         :return: HTML content (str) or None.
         """
-        try:
-            # Use FlareSolverr to bypass anti-bot protection
-            response = requests.post(
-                FLARE_SOLVERR_URL,
-                json={
-                    "cmd": "request.get",
-                    "url": listing_url,
-                    "maxTimeout": 60000
-                }
-            )
-            response.raise_for_status()
-            return response.json()['solution']['response']
-        except Exception as e:
-            print(f"[{self.site_name}] Failed to fetch listing details: {str(e)}")
-            return None
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                # Use FlareSolverr to bypass anti-bot protection
+                response = requests.post(
+                    FLARE_SOLVERR_URL,
+                    json={
+                        "cmd": "request.get",
+                        "url": listing_url,
+                        "maxTimeout": 60000
+                    }
+                )
+                response.raise_for_status()
+                content = response.json()['solution']['response']
+                
+                # Basic validation of received content
+                if "security check" in content.lower() or "captcha" in content.lower():
+                    raise ValueError("Anti-bot check detected in response")
+                    
+                return content
+            except Exception as e:
+                print(f"[{self.site_name}] Attempt {attempt+1}/{max_retries} failed: {str(e)}")
+                if attempt == max_retries - 1:
+                    print(f"[{self.site_name}] All attempts failed for {listing_url}")
+                    return None
 
 
     def parse_listing_details(self, html_content):
         """
         Parses the listing detail page HTML to extract detailed property information.
-        :param html_content: str, HTML content of the listing detail page.
-        :return: Dictionary with detailed property info.
-                 Should include 'price', 'description', 'image_count', 'title'.
+        Returns None if essential fields are missing.
         """
+        if not html_content:
+            return None
+            
         soup = BeautifulSoup(html_content, 'html.parser')
         details = {}
         
-        # Extract price - now using the data-cy attribute from header
+        # Extract price with validation
         price_elem = soup.find('strong', {'data-cy': 'adPageHeaderPrice'})
-        details['price'] = price_elem.get_text(strip=True) if price_elem else 'Price not available'
-        
-        # Extract area from the property details table
+        price = price_elem.get_text(strip=True) if price_elem else None
+        if price and any(c.isdigit() for c in price):
+            details['price'] = price
+        else:
+            return None  # Reject listings with invalid prices
+            
+        # Extract area with validation
         area_elem = soup.find('div', {'data-testid': 'table-value-area'})
-        details['area'] = area_elem.get_text(strip=True) if area_elem else 'N/A'
-        
-        # Extract description
+        if area_elem and 'm²' in area_elem.get_text():
+            details['area'] = area_elem.get_text(strip=True)
+        else:
+            details['area'] = 'N/A'
+            
+        # Extract description with validation
         description_elem = soup.find('div', {'data-cy': 'adPageAdDescription'})
-        details['description'] = description_elem.get_text(strip=True) if description_elem else 'No description'
+        if description_elem and len(description_elem.get_text(strip=True)) > 10:
+            details['description'] = description_elem.get_text(strip=True)
+        else:
+            details['description'] = 'No description'
         
         # Count images - more reliable count from gallery container
         gallery = soup.find('div', {'data-cy': 'mosaic-gallery-main-view'})
