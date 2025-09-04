@@ -96,22 +96,15 @@ class OtodomScraper(BaseScraper):
                         "session": "otodom_session",
                         "maxTimeout": 120000,
                         "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
-                        "proxy": {
-                            "url": os.getenv('PROXY_URL')  # Optional proxy if needed
-                        }
                     }
                 )
                 response.raise_for_status()
                 content = response.json()['solution']['response']
-                
-                # Basic validation of received content
-                if "security check" in content.lower() or "captcha" in content.lower():
-                    raise ValueError("Anti-bot check detected in response")
-                    
                 return content
             except Exception as e:
+                print(f"[{self.site_name}] Attempt {attempt+1}/{max_retries} failed: {str(e)}")
                 if attempt == max_retries - 1:
-                    print(f"[{self.site_name}] Failed to fetch listing after {max_retries} attempts: {listing_url}")
+                    print(f"[{self.site_name}] All attempts failed for {listing_url}")
                     return None
 
 

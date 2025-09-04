@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: real-estate-db-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce  # Or ReadWriteMany if your storage supports it
+  resources:
+    requests:
+      storage: 1Gi  # Adjust size as needed
